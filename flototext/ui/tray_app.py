@@ -43,6 +43,7 @@ class TrayApp:
         on_quit: Optional[Callable] = None,
         on_toggle_sounds: Optional[Callable[[bool], None]] = None,
         on_toggle_notifications: Optional[Callable[[bool], None]] = None,
+        on_toggle_mute: Optional[Callable[[bool], None]] = None,
         on_copy_last: Optional[Callable] = None,
         on_edit_dictionary: Optional[Callable] = None
     ):
@@ -52,12 +53,14 @@ class TrayApp:
             on_quit: Callback when quit is selected.
             on_toggle_sounds: Callback when sounds are toggled.
             on_toggle_notifications: Callback when notifications are toggled.
+            on_toggle_mute: Callback when mute during recording is toggled.
             on_copy_last: Callback to copy last transcription to clipboard.
             on_edit_dictionary: Callback to edit custom words dictionary.
         """
         self.on_quit = on_quit
         self.on_toggle_sounds = on_toggle_sounds
         self.on_toggle_notifications = on_toggle_notifications
+        self.on_toggle_mute = on_toggle_mute
         self.on_copy_last = on_copy_last
         self.on_edit_dictionary = on_edit_dictionary
 
@@ -65,6 +68,7 @@ class TrayApp:
         self._state = AppState.LOADING
         self._sounds_enabled = config.ui.play_sounds
         self._notifications_enabled = config.ui.show_notifications
+        self._mute_enabled = config.ui.mute_during_recording
         self._transcription_count = 0
 
         if not HAS_PYSTRAY:
@@ -167,6 +171,11 @@ class TrayApp:
                 self._toggle_notifications,
                 checked=lambda item: self._notifications_enabled
             ),
+            MenuItem(
+                "Mute pendant enregistrement",
+                self._toggle_mute,
+                checked=lambda item: self._mute_enabled
+            ),
             Menu.SEPARATOR,
             MenuItem(
                 "Quitter",
@@ -196,6 +205,13 @@ class TrayApp:
         self._notifications_enabled = not self._notifications_enabled
         if self.on_toggle_notifications:
             self.on_toggle_notifications(self._notifications_enabled)
+        self._update_menu()
+
+    def _toggle_mute(self) -> None:
+        """Toggle mute during recording."""
+        self._mute_enabled = not self._mute_enabled
+        if self.on_toggle_mute:
+            self.on_toggle_mute(self._mute_enabled)
         self._update_menu()
 
     def _quit(self) -> None:

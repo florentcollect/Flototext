@@ -38,6 +38,7 @@ class UIConfig:
     app_name: str = "Flototext"
     show_notifications: bool = True
     play_sounds: bool = False
+    mute_during_recording: bool = True  # Mute system audio while recording
 
 
 @dataclass

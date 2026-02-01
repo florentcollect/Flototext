@@ -8,6 +8,7 @@ Windows voice recognition application with real-time transcription.
 - **AI Transcription**: Uses Qwen3-ASR-1.7B (supports French and 52 languages)
 - **Auto-paste**: Transcribed text is automatically pasted at cursor position
 - **Custom Dictionary**: Define word corrections for technical terms, names, etc.
+- **Auto-mute**: System audio is muted during recording to prevent interference
 - **History**: All transcriptions are saved (7-day retention)
 - **Visual feedback**: Color-coded system tray icon + Windows notifications
 
@@ -80,6 +81,7 @@ Right-click on the icon to access options:
 - **Edit dictionary**: Open the custom words dictionary file
 - **Sounds**: Enable/disable audio feedback
 - **Notifications**: Enable/disable Windows notifications
+- **Mute during recording**: Enable/disable system audio muting while recording
 - **Quit**: Close the application
 
 ## Custom Dictionary
@@ -125,7 +127,8 @@ Flototext/
 │   │   ├── audio_recorder.py   # Microphone capture
 │   │   ├── transcriber.py      # Qwen3-ASR model
 │   │   ├── text_inserter.py    # Clipboard paste
-│   │   └── text_corrector.py   # Custom word corrections
+│   │   ├── text_corrector.py   # Custom word corrections
+│   │   └── audio_muter.py      # System audio muting
 │   ├── storage/
 │   │   ├── database.py         # SQLite operations
 │   │   └── models.py           # Data models
@@ -153,6 +156,7 @@ Edit `flototext/config.py` to customize:
 - `model.model_name`: ASR model to use
 - `ui.play_sounds`: Sounds enabled by default
 - `ui.show_notifications`: Notifications enabled by default
+- `ui.mute_during_recording`: Mute system audio while recording (default: True)
 
 ## Troubleshooting
 

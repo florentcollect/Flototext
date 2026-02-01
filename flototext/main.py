@@ -13,6 +13,7 @@ from .core.audio_recorder import AudioRecorder
 from .core.transcriber import Transcriber
 from .core.text_inserter import TextInserter
 from .core.text_corrector import TextCorrector
+from .core.audio_muter import AudioMuter
 from .storage.database import Database
 from .storage.models import Transcription
 from .ui.tray_app import TrayApp, AppState
@@ -34,6 +35,7 @@ class FlototextApp:
         self._notification_manager = NotificationManager()
         self._text_inserter = TextInserter()
         self._text_corrector = TextCorrector()
+        self._audio_muter = AudioMuter(enabled=config.ui.mute_during_recording)
 
         # Initialize transcriber with callbacks
         self._transcriber = Transcriber(
@@ -52,6 +54,7 @@ class FlototextApp:
             on_quit=self._on_quit,
             on_toggle_sounds=self._on_toggle_sounds,
             on_toggle_notifications=self._on_toggle_notifications,
+            on_toggle_mute=self._on_toggle_mute,
             on_copy_last=self._on_copy_last,
             on_edit_dictionary=self._on_edit_dictionary
         )
@@ -115,6 +118,8 @@ class FlototextApp:
         if self._audio_recorder.start_recording():
             self._tray_app.set_state(AppState.RECORDING)
             self._sound_manager.play_start_recording()
+            # Mute system audio to prevent interference
+            self._audio_muter.mute()
 
     def _on_hotkey_release(self) -> None:
         """Handle hotkey release (stop recording and transcribe)."""
@@ -122,6 +127,8 @@ class FlototextApp:
             return
 
         result = self._audio_recorder.stop_recording()
+        # Restore system audio
+        self._audio_muter.unmute()
         self._sound_manager.play_stop_recording()
 
         if result is None:
@@ -211,6 +218,15 @@ class FlototextApp:
         """
         self._notification_manager.set_enabled(enabled)
         print(f"Notifications {'enabled' if enabled else 'disabled'}")
+
+    def _on_toggle_mute(self, enabled: bool) -> None:
+        """Handle mute during recording toggle.
+
+        Args:
+            enabled: Whether muting is enabled.
+        """
+        self._audio_muter.set_enabled(enabled)
+        print(f"Mute during recording {'enabled' if enabled else 'disabled'}")
 
     def _on_copy_last(self) -> None:
         """Copy last transcription to clipboard."""
