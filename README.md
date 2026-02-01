@@ -7,8 +7,8 @@ Application de reconnaissance vocale Windows avec transcription en temps réel.
 - **Activation par F2** : Appuyez et maintenez F2 pour enregistrer, relâchez pour transcrire
 - **Transcription IA** : Utilise Qwen3-ASR-1.7B (support français et 52 langues)
 - **Collage automatique** : Le texte transcrit est automatiquement collé à la position du curseur
-- **Historique** : Toutes les transcriptions sont sauvegardées dans une base SQLite
-- **Feedback visuel et audio** : Icône système colorée + sons de confirmation
+- **Historique** : Toutes les transcriptions sont sauvegardées (7 jours)
+- **Feedback visuel** : Icône système colorée + notifications Windows
 
 ## Prérequis
 
@@ -19,9 +19,10 @@ Application de reconnaissance vocale Windows avec transcription en temps réel.
 
 ## Installation
 
-1. Cloner ou télécharger le projet :
+1. Cloner le projet :
 ```bash
-cd F:\Flototext
+git clone https://github.com/florentcollect/Flototext.git
+cd Flototext
 ```
 
 2. Créer un environnement virtuel (recommandé) :
@@ -40,12 +41,17 @@ pip install -r requirements.txt
 pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
 ```
 
+5. Double-cliquer sur **`install.bat`** (en administrateur)
+   - Configure le démarrage automatique avec Windows
+   - Enregistre l'application dans les paramètres Windows
+
+Pour désinstaller : Paramètres Windows → Applications → Flototext → Désinstaller
+
 ## Utilisation
 
-1. Lancer l'application :
-```bash
-python -m flototext.main
-```
+1. Lancer manuellement (si besoin) :
+   - Double-cliquer sur **`start.bat`**
+   - Ou : `python -m flototext.main`
 
 2. L'icône apparaît dans la barre système (près de l'horloge)
 
@@ -69,13 +75,14 @@ python -m flototext.main
 ## Menu de l'icône système
 
 Clic droit sur l'icône pour accéder aux options :
-- **Sounds** : Activer/désactiver les sons de feedback
+- **Copier dernière transcription** : Récupérer la dernière transcription dans le presse-papiers
+- **Sons** : Activer/désactiver les sons de feedback
 - **Notifications** : Activer/désactiver les notifications Windows
-- **Quit** : Fermer l'application
+- **Quitter** : Fermer l'application
 
 ## Base de données
 
-Les transcriptions sont stockées dans `data/transcriptions.db`.
+Les transcriptions sont stockées dans `data/transcriptions.db` et conservées pendant 7 jours.
 
 Consulter l'historique :
 ```bash
@@ -85,7 +92,7 @@ sqlite3 data/transcriptions.db "SELECT * FROM transcriptions ORDER BY created_at
 ## Structure du projet
 
 ```
-F:\Flototext\
+Flototext/
 ├── flototext/
 │   ├── __init__.py
 │   ├── main.py                 # Point d'entrée
@@ -106,6 +113,9 @@ F:\Flototext\
 │   └── transcriptions.db       # Base de données
 ├── assets/
 │   └── icon.ico
+├── install.bat                 # Installation Windows
+├── uninstall.bat               # Désinstallation
+├── start.bat                   # Lancement manuel
 ├── requirements.txt
 └── README.md
 ```

@@ -150,6 +150,38 @@ class Database:
             cursor.execute("DELETE FROM transcriptions WHERE id = ?", (transcription_id,))
             return cursor.rowcount > 0
 
+    def delete_old_transcriptions(self, days: int = 7) -> int:
+        """Delete transcriptions older than specified days.
+
+        Args:
+            days: Number of days to keep transcriptions.
+
+        Returns:
+            Number of deleted transcriptions.
+        """
+        with self._cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM transcriptions WHERE created_at < datetime('now', ?)",
+                (f'-{days} days',)
+            )
+            return cursor.rowcount
+
+    def get_last_transcription(self) -> Optional[Transcription]:
+        """Get the most recent transcription.
+
+        Returns:
+            The last transcription or None if none exist.
+        """
+        with self._cursor() as cursor:
+            cursor.execute(
+                "SELECT id, text, language, duration_seconds, created_at, word_count "
+                "FROM transcriptions ORDER BY created_at DESC LIMIT 1"
+            )
+            row = cursor.fetchone()
+            if row:
+                return Transcription.from_row(tuple(row))
+            return None
+
     def close(self) -> None:
         """Close the database connection."""
         if hasattr(self._local, 'connection') and self._local.connection:

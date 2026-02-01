@@ -37,7 +37,7 @@ class UIConfig:
     """UI configuration."""
     app_name: str = "Flototext"
     show_notifications: bool = True
-    play_sounds: bool = True
+    play_sounds: bool = False
 
 
 @dataclass

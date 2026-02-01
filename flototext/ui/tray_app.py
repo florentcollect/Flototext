@@ -42,7 +42,7 @@ class TrayApp:
         on_quit: Optional[Callable] = None,
         on_toggle_sounds: Optional[Callable[[bool], None]] = None,
         on_toggle_notifications: Optional[Callable[[bool], None]] = None,
-        on_show_history: Optional[Callable] = None
+        on_copy_last: Optional[Callable] = None
     ):
         """Initialize the tray application.
 
@@ -50,12 +50,12 @@ class TrayApp:
             on_quit: Callback when quit is selected.
             on_toggle_sounds: Callback when sounds are toggled.
             on_toggle_notifications: Callback when notifications are toggled.
-            on_show_history: Callback to show transcription history.
+            on_copy_last: Callback to copy last transcription to clipboard.
         """
         self.on_quit = on_quit
         self.on_toggle_sounds = on_toggle_sounds
         self.on_toggle_notifications = on_toggle_notifications
-        self.on_show_history = on_show_history
+        self.on_copy_last = on_copy_last
 
         self._icon: Optional[pystray.Icon] = None
         self._state = AppState.LOADING
@@ -145,7 +145,12 @@ class TrayApp:
             ),
             Menu.SEPARATOR,
             MenuItem(
-                "Sounds",
+                "Copier derniere transcription",
+                self._copy_last
+            ),
+            Menu.SEPARATOR,
+            MenuItem(
+                "Sons",
                 self._toggle_sounds,
                 checked=lambda item: self._sounds_enabled
             ),
@@ -156,10 +161,15 @@ class TrayApp:
             ),
             Menu.SEPARATOR,
             MenuItem(
-                "Quit",
+                "Quitter",
                 self._quit
             )
         )
+
+    def _copy_last(self) -> None:
+        """Copy last transcription to clipboard."""
+        if self.on_copy_last:
+            self.on_copy_last()
 
     def _toggle_sounds(self) -> None:
         """Toggle sound feedback."""

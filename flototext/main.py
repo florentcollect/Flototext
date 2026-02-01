@@ -48,7 +48,8 @@ class FlototextApp:
         self._tray_app = TrayApp(
             on_quit=self._on_quit,
             on_toggle_sounds=self._on_toggle_sounds,
-            on_toggle_notifications=self._on_toggle_notifications
+            on_toggle_notifications=self._on_toggle_notifications,
+            on_copy_last=self._on_copy_last
         )
 
         # Initialize hotkey manager with callbacks
@@ -206,6 +207,17 @@ class FlototextApp:
         self._notification_manager.set_enabled(enabled)
         print(f"Notifications {'enabled' if enabled else 'disabled'}")
 
+    def _on_copy_last(self) -> None:
+        """Copy last transcription to clipboard."""
+        last = self._database.get_last_transcription()
+        if last and last.text:
+            self._text_inserter.copy_to_clipboard(last.text)
+            self._notification_manager.notify_clipboard_only(last.text)
+            print(f"Copied to clipboard: {last.text[:50]}...")
+        else:
+            self._notification_manager.notify_error("Aucune transcription disponible")
+            print("No transcription available")
+
     def _on_quit(self) -> None:
         """Handle quit request."""
         print("Quit requested")
@@ -227,6 +239,11 @@ class FlototextApp:
         print(f"Press {config.hotkey.trigger_key.upper()} to record")
 
         self._running = True
+
+        # Clean up old transcriptions (keep only last 7 days)
+        deleted = self._database.delete_old_transcriptions(days=7)
+        if deleted > 0:
+            print(f"Cleaned up {deleted} old transcription(s)")
 
         # Set up signal handlers
         signal.signal(signal.SIGINT, self._signal_handler)
