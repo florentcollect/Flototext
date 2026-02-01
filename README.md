@@ -52,7 +52,7 @@ To uninstall: Windows Settings → Apps → Flototext → Uninstall
 ## Usage
 
 1. Launch manually (if needed):
-   - Double-click **`start.bat`**
+   - Double-click **`start-flototext.bat`**
    - Or: `python -m flototext.main`
 
 2. The icon appears in the system tray (near the clock)
@@ -143,7 +143,7 @@ Flototext/
 │   └── icon.ico
 ├── install.bat                 # Windows installer
 ├── uninstall.bat               # Uninstaller
-├── start.bat                   # Manual launch
+├── start-flototext.bat                   # Manual launch
 ├── requirements.txt
 └── README.md
 ```

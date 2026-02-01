@@ -17,7 +17,7 @@ if %errorlevel% neq 0 (
 
 set "APP_NAME=Flototext"
 set "APP_PATH=%~dp0"
-set "APP_EXE=%APP_PATH%start.bat"
+set "APP_EXE=%APP_PATH%start-flototext.bat"
 set "UNINSTALL_EXE=%APP_PATH%uninstall.bat"
 set "ICON_PATH=%APP_PATH%assets\icon.ico"
 
