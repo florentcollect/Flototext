@@ -35,7 +35,7 @@ class HotkeyConfig:
 class UIConfig:
     """UI configuration."""
     app_name: str = "Flototext"
-    language: str = "fr"  # Language code (fr, en, etc.)
+    language: str = "en"  # Language code (en, fr, etc.)
     show_notifications: bool = True
     play_sounds: bool = False
     mute_during_recording: bool = True  # Mute system audio while recording

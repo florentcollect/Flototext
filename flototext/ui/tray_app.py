@@ -158,11 +158,20 @@ class TrayApp:
         for lang in languages:
             code = lang["code"]
             name = lang["name"]
+            # Create a closure that captures the code properly
+            def make_callback(lang_code):
+                def callback():
+                    self._change_language(lang_code)
+                return callback
+            def make_checked(lang_code):
+                def checked(item):
+                    return localization.current_language == lang_code
+                return checked
             items.append(
                 MenuItem(
                     name,
-                    lambda _, c=code: self._change_language(c),
-                    checked=lambda item, c=code: localization.current_language == c
+                    make_callback(code),
+                    checked=make_checked(code)
                 )
             )
         return Menu(*items)
