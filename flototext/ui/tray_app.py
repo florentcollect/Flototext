@@ -1,5 +1,6 @@
 """System tray application using pystray."""
 
+import os
 import threading
 from typing import Callable, Optional
 from enum import Enum
@@ -42,7 +43,8 @@ class TrayApp:
         on_quit: Optional[Callable] = None,
         on_toggle_sounds: Optional[Callable[[bool], None]] = None,
         on_toggle_notifications: Optional[Callable[[bool], None]] = None,
-        on_copy_last: Optional[Callable] = None
+        on_copy_last: Optional[Callable] = None,
+        on_edit_dictionary: Optional[Callable] = None
     ):
         """Initialize the tray application.
 
@@ -51,11 +53,13 @@ class TrayApp:
             on_toggle_sounds: Callback when sounds are toggled.
             on_toggle_notifications: Callback when notifications are toggled.
             on_copy_last: Callback to copy last transcription to clipboard.
+            on_edit_dictionary: Callback to edit custom words dictionary.
         """
         self.on_quit = on_quit
         self.on_toggle_sounds = on_toggle_sounds
         self.on_toggle_notifications = on_toggle_notifications
         self.on_copy_last = on_copy_last
+        self.on_edit_dictionary = on_edit_dictionary
 
         self._icon: Optional[pystray.Icon] = None
         self._state = AppState.LOADING
@@ -148,6 +152,10 @@ class TrayApp:
                 "Copier derniere transcription",
                 self._copy_last
             ),
+            MenuItem(
+                "Editer dictionnaire",
+                self._edit_dictionary
+            ),
             Menu.SEPARATOR,
             MenuItem(
                 "Sons",
@@ -170,6 +178,11 @@ class TrayApp:
         """Copy last transcription to clipboard."""
         if self.on_copy_last:
             self.on_copy_last()
+
+    def _edit_dictionary(self) -> None:
+        """Open the custom words dictionary for editing."""
+        if self.on_edit_dictionary:
+            self.on_edit_dictionary()
 
     def _toggle_sounds(self) -> None:
         """Toggle sound feedback."""
@@ -227,7 +240,7 @@ class TrayApp:
             )
             self._icon.run()
 
-        thread = threading.Thread(target=run, daemon=True)
+        thread = threading.Thread(target=run, daemon=False)
         thread.start()
 
     def stop(self) -> None:

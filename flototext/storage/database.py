@@ -27,7 +27,7 @@ class Database:
         if not hasattr(self._local, 'connection') or self._local.connection is None:
             self._local.connection = sqlite3.connect(
                 str(self.db_path),
-                check_same_thread=False
+                check_same_thread=True  # Each thread has its own connection via threading.local
             )
             self._local.connection.row_factory = sqlite3.Row
         return self._local.connection

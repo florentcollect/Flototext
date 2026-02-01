@@ -46,6 +46,7 @@ class AudioRecorder:
         self._audio_data: list = []
         self._stream: Optional[sd.InputStream] = None
         self._lock = threading.Lock()
+        self._data_lock = threading.Lock()  # Separate lock for audio data access
         self._start_time: float = 0
 
     @property
@@ -58,7 +59,8 @@ class AudioRecorder:
         if status:
             print(f"Audio status: {status}")
         if self._recording:
-            self._audio_data.append(indata.copy())
+            with self._data_lock:
+                self._audio_data.append(indata.copy())
 
     def start_recording(self) -> bool:
         """Start recording audio.
@@ -115,16 +117,17 @@ class AudioRecorder:
                 if self.on_stop:
                     self.on_stop()
 
-                if not self._audio_data:
-                    return RecordingResult(
-                        audio_data=np.array([]),
-                        sample_rate=self.sample_rate,
-                        duration=0,
-                        is_valid=False
-                    )
-
-                # Concatenate all audio chunks
-                audio_data = np.concatenate(self._audio_data, axis=0)
+                # Copy audio data under lock to prevent race condition
+                with self._data_lock:
+                    if not self._audio_data:
+                        return RecordingResult(
+                            audio_data=np.array([]),
+                            sample_rate=self.sample_rate,
+                            duration=0,
+                            is_valid=False
+                        )
+                    # Concatenate all audio chunks
+                    audio_data = np.concatenate(self._audio_data, axis=0)
 
                 # Flatten to mono if needed
                 if len(audio_data.shape) > 1:

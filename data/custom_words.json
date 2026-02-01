@@ -1,0 +1,10 @@
+{
+  "corrections": {
+    "clode": "Claude",
+    "anthropique": "Anthropic",
+    "pie torche": "PyTorch",
+    "tensor flot": "TensorFlow",
+    "gpt quatre": "GPT-4"
+  },
+  "_comment": "Add your custom word corrections here. Keys are what the ASR outputs, values are the correct spelling."
+}

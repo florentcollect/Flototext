@@ -7,6 +7,7 @@ Windows voice recognition application with real-time transcription.
 - **Push-to-talk with F2**: Hold F2 to record, release to transcribe
 - **AI Transcription**: Uses Qwen3-ASR-1.7B (supports French and 52 languages)
 - **Auto-paste**: Transcribed text is automatically pasted at cursor position
+- **Custom Dictionary**: Define word corrections for technical terms, names, etc.
 - **History**: All transcriptions are saved (7-day retention)
 - **Visual feedback**: Color-coded system tray icon + Windows notifications
 
@@ -76,9 +77,31 @@ To uninstall: Windows Settings → Apps → Flototext → Uninstall
 
 Right-click on the icon to access options:
 - **Copy last transcription**: Copy the last transcription to clipboard
+- **Edit dictionary**: Open the custom words dictionary file
 - **Sounds**: Enable/disable audio feedback
 - **Notifications**: Enable/disable Windows notifications
 - **Quit**: Close the application
+
+## Custom Dictionary
+
+Create custom word corrections for terms that are frequently misrecognized (technical jargon, names, etc.).
+
+The dictionary file is located at `data/custom_words.json`:
+
+```json
+{
+  "corrections": {
+    "clode": "Claude",
+    "anthropique": "Anthropic",
+    "pie torche": "PyTorch"
+  }
+}
+```
+
+- **Keys**: What the ASR model outputs (lowercase)
+- **Values**: The correct spelling you want
+
+Access via tray menu: **Edit dictionary** (opens the file in your default JSON editor)
 
 ## Database
 
@@ -101,7 +124,8 @@ Flototext/
 │   │   ├── hotkey_manager.py   # F2 key detection
 │   │   ├── audio_recorder.py   # Microphone capture
 │   │   ├── transcriber.py      # Qwen3-ASR model
-│   │   └── text_inserter.py    # Clipboard paste
+│   │   ├── text_inserter.py    # Clipboard paste
+│   │   └── text_corrector.py   # Custom word corrections
 │   ├── storage/
 │   │   ├── database.py         # SQLite operations
 │   │   └── models.py           # Data models
@@ -110,7 +134,8 @@ Flototext/
 │       ├── notifications.py    # Toast notifications
 │       └── sounds.py           # Audio feedback
 ├── data/
-│   └── transcriptions.db       # Database
+│   ├── transcriptions.db       # Database
+│   └── custom_words.json       # Custom word dictionary
 ├── assets/
 │   └── icon.ico
 ├── install.bat                 # Windows installer

@@ -1,5 +1,6 @@
 """Main entry point for Flototext application."""
 
+import os
 import sys
 import time
 import threading
@@ -11,6 +12,7 @@ from .core.hotkey_manager import HotkeyManager
 from .core.audio_recorder import AudioRecorder
 from .core.transcriber import Transcriber
 from .core.text_inserter import TextInserter
+from .core.text_corrector import TextCorrector
 from .storage.database import Database
 from .storage.models import Transcription
 from .ui.tray_app import TrayApp, AppState
@@ -31,6 +33,7 @@ class FlototextApp:
         self._sound_manager = SoundManager()
         self._notification_manager = NotificationManager()
         self._text_inserter = TextInserter()
+        self._text_corrector = TextCorrector()
 
         # Initialize transcriber with callbacks
         self._transcriber = Transcriber(
@@ -49,7 +52,8 @@ class FlototextApp:
             on_quit=self._on_quit,
             on_toggle_sounds=self._on_toggle_sounds,
             on_toggle_notifications=self._on_toggle_notifications,
-            on_copy_last=self._on_copy_last
+            on_copy_last=self._on_copy_last,
+            on_edit_dictionary=self._on_edit_dictionary
         )
 
         # Initialize hotkey manager with callbacks
@@ -161,7 +165,8 @@ class FlototextApp:
             self._tray_app.set_state(AppState.IDLE)
             return
 
-        text = result.text.strip()
+        # Apply custom word corrections
+        text = self._text_corrector.correct(result.text.strip())
         word_count = len(text.split())
 
         # Save to database
@@ -217,6 +222,16 @@ class FlototextApp:
         else:
             self._notification_manager.notify_error("Aucune transcription disponible")
             print("No transcription available")
+
+    def _on_edit_dictionary(self) -> None:
+        """Open the custom words dictionary file for editing."""
+        dictionary_path = self._text_corrector.dictionary_file
+        print(f"Opening dictionary: {dictionary_path}")
+        try:
+            os.startfile(str(dictionary_path))
+        except Exception as e:
+            print(f"Error opening dictionary: {e}")
+            self._notification_manager.notify_error(f"Cannot open dictionary: {e}")
 
     def _on_quit(self) -> None:
         """Handle quit request."""
