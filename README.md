@@ -1,148 +1,148 @@
 # Flototext
 
-Application de reconnaissance vocale Windows avec transcription en temps réel.
+Windows voice recognition application with real-time transcription.
 
-## Fonctionnalités
+## Features
 
-- **Activation par F2** : Appuyez et maintenez F2 pour enregistrer, relâchez pour transcrire
-- **Transcription IA** : Utilise Qwen3-ASR-1.7B (support français et 52 langues)
-- **Collage automatique** : Le texte transcrit est automatiquement collé à la position du curseur
-- **Historique** : Toutes les transcriptions sont sauvegardées (7 jours)
-- **Feedback visuel** : Icône système colorée + notifications Windows
+- **Push-to-talk with F2**: Hold F2 to record, release to transcribe
+- **AI Transcription**: Uses Qwen3-ASR-1.7B (supports French and 52 languages)
+- **Auto-paste**: Transcribed text is automatically pasted at cursor position
+- **History**: All transcriptions are saved (7-day retention)
+- **Visual feedback**: Color-coded system tray icon + Windows notifications
 
-## Prérequis
+## Requirements
 
 - Windows 10/11
 - Python 3.10+
-- GPU NVIDIA avec CUDA (RTX série recommandée)
-- ~4 GB VRAM disponible
+- NVIDIA GPU with CUDA (RTX series recommended)
+- ~4 GB VRAM available
 
 ## Installation
 
-1. Cloner le projet :
+1. Clone the project:
 ```bash
 git clone https://github.com/florentcollect/Flototext.git
 cd Flototext
 ```
 
-2. Créer un environnement virtuel (recommandé) :
+2. Create a virtual environment (recommended):
 ```bash
 python -m venv venv
 venv\Scripts\activate
 ```
 
-3. Installer les dépendances :
+3. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-4. Pour le support GPU avec PyTorch CUDA :
+4. For GPU support with PyTorch CUDA:
 ```bash
 pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
 ```
 
-5. Double-cliquer sur **`install.bat`** (en administrateur)
-   - Configure le démarrage automatique avec Windows
-   - Enregistre l'application dans les paramètres Windows
+5. Double-click **`install.bat`** (as administrator)
+   - Configures auto-start with Windows
+   - Registers the application in Windows Settings
 
-Pour désinstaller : Paramètres Windows → Applications → Flototext → Désinstaller
+To uninstall: Windows Settings → Apps → Flototext → Uninstall
 
-## Utilisation
+## Usage
 
-1. Lancer manuellement (si besoin) :
-   - Double-cliquer sur **`start.bat`**
-   - Ou : `python -m flototext.main`
+1. Launch manually (if needed):
+   - Double-click **`start.bat`**
+   - Or: `python -m flototext.main`
 
-2. L'icône apparaît dans la barre système (près de l'horloge)
+2. The icon appears in the system tray (near the clock)
 
-3. **Enregistrement** :
-   - Appuyez et **maintenez** F2 pour commencer l'enregistrement
-   - Parlez en français
-   - **Relâchez** F2 pour arrêter et transcrire
+3. **Recording**:
+   - Press and **hold** F2 to start recording
+   - Speak (supports 52 languages including French, English, Chinese...)
+   - **Release** F2 to stop and transcribe
 
-4. Le texte transcrit sera automatiquement collé là où se trouve votre curseur
+4. The transcribed text will be automatically pasted at your cursor position
 
-## États de l'icône
+## Tray Icon States
 
-| Couleur | État |
-|---------|------|
-| Orange | Chargement du modèle |
-| Vert | Prêt |
-| Rouge | Enregistrement en cours |
-| Jaune | Traitement de la transcription |
-| Gris | Erreur |
+| Color | State |
+|-------|-------|
+| Orange | Loading model |
+| Green | Ready |
+| Red | Recording |
+| Yellow | Processing transcription |
+| Gray | Error |
 
-## Menu de l'icône système
+## System Tray Menu
 
-Clic droit sur l'icône pour accéder aux options :
-- **Copier dernière transcription** : Récupérer la dernière transcription dans le presse-papiers
-- **Sons** : Activer/désactiver les sons de feedback
-- **Notifications** : Activer/désactiver les notifications Windows
-- **Quitter** : Fermer l'application
+Right-click on the icon to access options:
+- **Copy last transcription**: Copy the last transcription to clipboard
+- **Sounds**: Enable/disable audio feedback
+- **Notifications**: Enable/disable Windows notifications
+- **Quit**: Close the application
 
-## Base de données
+## Database
 
-Les transcriptions sont stockées dans `data/transcriptions.db` et conservées pendant 7 jours.
+Transcriptions are stored in `data/transcriptions.db` and kept for 7 days.
 
-Consulter l'historique :
+View history:
 ```bash
 sqlite3 data/transcriptions.db "SELECT * FROM transcriptions ORDER BY created_at DESC LIMIT 10"
 ```
 
-## Structure du projet
+## Project Structure
 
 ```
 Flototext/
 ├── flototext/
 │   ├── __init__.py
-│   ├── main.py                 # Point d'entrée
+│   ├── main.py                 # Entry point
 │   ├── config.py               # Configuration
 │   ├── core/
-│   │   ├── hotkey_manager.py   # Détection F2
-│   │   ├── audio_recorder.py   # Capture microphone
-│   │   ├── transcriber.py      # Modèle Qwen3-ASR
-│   │   └── text_inserter.py    # Collage clipboard
+│   │   ├── hotkey_manager.py   # F2 key detection
+│   │   ├── audio_recorder.py   # Microphone capture
+│   │   ├── transcriber.py      # Qwen3-ASR model
+│   │   └── text_inserter.py    # Clipboard paste
 │   ├── storage/
-│   │   ├── database.py         # Opérations SQLite
-│   │   └── models.py           # Modèles de données
+│   │   ├── database.py         # SQLite operations
+│   │   └── models.py           # Data models
 │   └── ui/
-│       ├── tray_app.py         # Icône système
-│       ├── notifications.py    # Notifications toast
-│       └── sounds.py           # Feedback audio
+│       ├── tray_app.py         # System tray icon
+│       ├── notifications.py    # Toast notifications
+│       └── sounds.py           # Audio feedback
 ├── data/
-│   └── transcriptions.db       # Base de données
+│   └── transcriptions.db       # Database
 ├── assets/
 │   └── icon.ico
-├── install.bat                 # Installation Windows
-├── uninstall.bat               # Désinstallation
-├── start.bat                   # Lancement manuel
+├── install.bat                 # Windows installer
+├── uninstall.bat               # Uninstaller
+├── start.bat                   # Manual launch
 ├── requirements.txt
 └── README.md
 ```
 
 ## Configuration
 
-Modifier `flototext/config.py` pour personnaliser :
-- `hotkey.trigger_key` : Touche de déclenchement (défaut: "f2")
-- `audio.sample_rate` : Taux d'échantillonnage (défaut: 16000)
-- `model.model_name` : Modèle ASR à utiliser
-- `ui.play_sounds` : Sons activés par défaut
-- `ui.show_notifications` : Notifications activées par défaut
+Edit `flototext/config.py` to customize:
+- `hotkey.trigger_key`: Trigger key (default: "f2")
+- `audio.sample_rate`: Sample rate (default: 16000)
+- `model.model_name`: ASR model to use
+- `ui.play_sounds`: Sounds enabled by default
+- `ui.show_notifications`: Notifications enabled by default
 
-## Dépannage
+## Troubleshooting
 
-### Le modèle ne se charge pas
-- Vérifiez que CUDA est installé : `python -c "import torch; print(torch.cuda.is_available())"`
-- Assurez-vous d'avoir assez de VRAM (~4 GB)
+### Model won't load
+- Check CUDA is installed: `python -c "import torch; print(torch.cuda.is_available())"`
+- Make sure you have enough VRAM (~4 GB)
 
-### Pas de son lors de l'enregistrement
-- Vérifiez que le microphone par défaut est correctement configuré dans Windows
-- Testez avec un autre logiciel d'enregistrement
+### No audio during recording
+- Check that the default microphone is properly configured in Windows
+- Test with another recording application
 
-### Le texte ne se colle pas
-- Assurez-vous qu'un champ de texte est actif (curseur clignotant)
-- Le texte est aussi copié dans le presse-papiers (Ctrl+V manuellement)
+### Text doesn't paste
+- Make sure a text field is active (blinking cursor)
+- Text is also copied to clipboard (use Ctrl+V manually)
 
-## Licence
+## License
 
 MIT License
