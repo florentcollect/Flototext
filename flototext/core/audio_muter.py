@@ -6,7 +6,8 @@ from typing import Optional
 try:
     from ctypes import cast, POINTER
     from comtypes import CLSCTX_ALL
-    from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+    from pycaw.pycaw import AudioUtilities
+    from pycaw.api.endpointvolume import IAudioEndpointVolume
     HAS_PYCAW = True
 except ImportError:
     HAS_PYCAW = False
@@ -22,9 +23,8 @@ class AudioMuter:
             enabled: Whether muting is enabled.
         """
         self.enabled = enabled
-        self._volume_interface: Optional[IAudioEndpointVolume] = None
+        self._volume_interface = None
         self._was_muted: bool = False
-        self._previous_volume: float = 1.0
         self._lock = threading.Lock()
         self._is_muted_by_us = False
 
@@ -36,11 +36,14 @@ class AudioMuter:
     def _init_audio_interface(self) -> None:
         """Initialize the Windows audio interface."""
         try:
-            devices = AudioUtilities.GetSpeakers()
-            interface = devices.Activate(
+            device = AudioUtilities.GetSpeakers()
+            # Access the underlying COM object via _dev
+            endpoint = device._dev
+            interface = endpoint.Activate(
                 IAudioEndpointVolume._iid_, CLSCTX_ALL, None
             )
             self._volume_interface = cast(interface, POINTER(IAudioEndpointVolume))
+            print("Audio muter initialized successfully")
         except Exception as e:
             print(f"Error initializing audio interface: {e}")
             self._volume_interface = None
@@ -66,7 +69,6 @@ class AudioMuter:
                 if not self._was_muted:
                     self._volume_interface.SetMute(1, None)
                     self._is_muted_by_us = True
-                    return True
                 return True
             except Exception as e:
                 print(f"Error muting audio: {e}")
