@@ -5,13 +5,10 @@ from typing import Optional
 
 from ..config import config
 
-# Try to import win10toast, provide fallback if not available
-try:
-    from win10toast import ToastNotifier
-    HAS_TOAST = True
-except ImportError:
-    HAS_TOAST = False
-    ToastNotifier = None
+# Disable win10toast due to WNDPROC errors on modern Windows
+# Use simple print notifications instead
+HAS_TOAST = False
+ToastNotifier = None
 
 
 class NotificationManager:

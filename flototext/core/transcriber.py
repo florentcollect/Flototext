@@ -133,18 +133,11 @@ class Transcriber:
             if audio_data.dtype != np.float32:
                 audio_data = audio_data.astype(np.float32)
 
-            # Normalize if needed
+            # Normalize audio
             max_val = np.abs(audio_data).max()
-            if max_val > 1.0:
+            if max_val > 0:
+                # Normalize to [-1, 1] range for better ASR performance
                 audio_data = audio_data / max_val
-            elif max_val < 0.01:
-                # Audio too quiet
-                return TranscriptionResult(
-                    text="",
-                    language=config.model.language,
-                    success=False,
-                    error="Audio too quiet"
-                )
 
             # Transcribe using Qwen3-ASR
             # The model accepts (np.ndarray, sample_rate) tuples
