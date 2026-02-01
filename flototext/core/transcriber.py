@@ -6,6 +6,7 @@ from typing import Optional, Callable
 from dataclasses import dataclass
 
 from ..config import config
+from .localization import localization
 
 
 @dataclass
@@ -121,9 +122,9 @@ class Transcriber:
         if not self._model_loaded:
             return TranscriptionResult(
                 text="",
-                language=config.model.language,
+                language=localization.asr_language,
                 success=False,
-                error="Model not loaded"
+                error=localization.get("errors.model_not_loaded")
             )
 
         try:
@@ -143,16 +144,16 @@ class Transcriber:
             # The model accepts (np.ndarray, sample_rate) tuples
             results = self._model.transcribe(
                 audio=(audio_data, sample_rate),
-                language=config.model.language,
+                language=localization.asr_language,
             )
 
             # Get the transcription result
             if results and len(results) > 0:
                 transcription = results[0].text.strip()
-                detected_language = results[0].language or config.model.language
+                detected_language = results[0].language or localization.asr_language
             else:
                 transcription = ""
-                detected_language = config.model.language
+                detected_language = localization.asr_language
 
             # Clear CUDA cache to free memory
             if torch.cuda.is_available():
@@ -167,24 +168,24 @@ class Transcriber:
         except torch.cuda.OutOfMemoryError:
             import torch
             torch.cuda.empty_cache()
-            error_msg = "GPU out of memory. Please try a shorter recording."
+            error_msg = localization.get("errors.gpu_oom")
             if self.on_error:
                 self.on_error(error_msg)
             return TranscriptionResult(
                 text="",
-                language=config.model.language,
+                language=localization.asr_language,
                 success=False,
                 error=error_msg
             )
 
         except Exception as e:
-            error_msg = f"Transcription error: {e}"
+            error_msg = localization.get("errors.transcription_error", error=str(e))
             print(error_msg)
             if self.on_error:
                 self.on_error(error_msg)
             return TranscriptionResult(
                 text="",
-                language=config.model.language,
+                language=localization.asr_language,
                 success=False,
                 error=error_msg
             )

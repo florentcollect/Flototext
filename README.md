@@ -172,6 +172,12 @@ Edit `flototext/config.py` to customize:
 - Make sure a text field is active (blinking cursor)
 - Text is also copied to clipboard (use Ctrl+V manually)
 
+## Support
+
+If Flototext saves you time, consider supporting its development:
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/I2I61TF2LS)
+
 ## License
 
 MIT License

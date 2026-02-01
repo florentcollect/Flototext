@@ -15,6 +15,7 @@ except ImportError:
     pystray = None
 
 from ..config import config
+from ..core.localization import localization
 
 
 class AppState(Enum):
@@ -38,6 +39,15 @@ class TrayApp:
         AppState.ERROR: (128, 128, 128),     # Gray
     }
 
+    # State to localization key mapping
+    STATE_KEYS = {
+        AppState.LOADING: "loading",
+        AppState.IDLE: "ready",
+        AppState.RECORDING: "recording",
+        AppState.PROCESSING: "processing",
+        AppState.ERROR: "error",
+    }
+
     def __init__(
         self,
         on_quit: Optional[Callable] = None,
@@ -45,7 +55,8 @@ class TrayApp:
         on_toggle_notifications: Optional[Callable[[bool], None]] = None,
         on_toggle_mute: Optional[Callable[[bool], None]] = None,
         on_copy_last: Optional[Callable] = None,
-        on_edit_dictionary: Optional[Callable] = None
+        on_edit_dictionary: Optional[Callable] = None,
+        on_change_language: Optional[Callable[[str], None]] = None
     ):
         """Initialize the tray application.
 
@@ -56,6 +67,7 @@ class TrayApp:
             on_toggle_mute: Callback when mute during recording is toggled.
             on_copy_last: Callback to copy last transcription to clipboard.
             on_edit_dictionary: Callback to edit custom words dictionary.
+            on_change_language: Callback when language is changed.
         """
         self.on_quit = on_quit
         self.on_toggle_sounds = on_toggle_sounds
@@ -63,6 +75,7 @@ class TrayApp:
         self.on_toggle_mute = on_toggle_mute
         self.on_copy_last = on_copy_last
         self.on_edit_dictionary = on_edit_dictionary
+        self.on_change_language = on_change_language
 
         self._icon: Optional[pystray.Icon] = None
         self._state = AppState.LOADING
@@ -124,61 +137,82 @@ class TrayApp:
 
     def _get_tooltip(self) -> str:
         """Get tooltip text based on current state."""
-        state_text = {
-            AppState.LOADING: "Loading model...",
-            AppState.IDLE: "Ready (Press F2 to record)",
-            AppState.RECORDING: "Recording...",
-            AppState.PROCESSING: "Processing...",
-            AppState.ERROR: "Error - Check logs"
-        }
-        base_text = f"{config.ui.app_name} - {state_text.get(self._state, 'Unknown')}"
+        state_key = self.STATE_KEYS.get(self._state, "ready")
+        state_text = localization.get(f"tooltip.{state_key}")
+        base_text = f"{config.ui.app_name} - {state_text}"
 
         if self._transcription_count > 0:
-            base_text += f"\nTranscriptions: {self._transcription_count}"
+            base_text += f"\n{localization.get('menu.transcriptions', count=self._transcription_count)}"
 
         return base_text
+
+    def _get_state_display(self) -> str:
+        """Get localized state display text."""
+        state_key = self.STATE_KEYS.get(self._state, "ready")
+        return localization.get(f"states.{state_key}")
+
+    def _create_language_menu(self) -> Menu:
+        """Create the language submenu."""
+        languages = localization.get_available_languages()
+        items = []
+        for lang in languages:
+            code = lang["code"]
+            name = lang["name"]
+            items.append(
+                MenuItem(
+                    name,
+                    lambda _, c=code: self._change_language(c),
+                    checked=lambda item, c=code: localization.current_language == c
+                )
+            )
+        return Menu(*items)
 
     def _create_menu(self) -> Menu:
         """Create the context menu for the tray icon."""
         return Menu(
             MenuItem(
-                f"Status: {self._state.value.capitalize()}",
+                localization.get("menu.status", state=self._get_state_display()),
                 lambda: None,
                 enabled=False
             ),
             MenuItem(
-                f"Transcriptions: {self._transcription_count}",
+                localization.get("menu.transcriptions", count=self._transcription_count),
                 lambda: None,
                 enabled=False
             ),
             Menu.SEPARATOR,
             MenuItem(
-                "Copier derniere transcription",
+                localization.get("menu.copy_last"),
                 self._copy_last
             ),
             MenuItem(
-                "Editer dictionnaire",
+                localization.get("menu.edit_dictionary"),
                 self._edit_dictionary
             ),
             Menu.SEPARATOR,
             MenuItem(
-                "Sons",
+                localization.get("menu.sounds"),
                 self._toggle_sounds,
                 checked=lambda item: self._sounds_enabled
             ),
             MenuItem(
-                "Notifications",
+                localization.get("menu.notifications"),
                 self._toggle_notifications,
                 checked=lambda item: self._notifications_enabled
             ),
             MenuItem(
-                "Mute pendant enregistrement",
+                localization.get("menu.mute_recording"),
                 self._toggle_mute,
                 checked=lambda item: self._mute_enabled
             ),
             Menu.SEPARATOR,
             MenuItem(
-                "Quitter",
+                localization.get("menu.language"),
+                self._create_language_menu()
+            ),
+            Menu.SEPARATOR,
+            MenuItem(
+                localization.get("menu.quit"),
                 self._quit
             )
         )
@@ -214,6 +248,16 @@ class TrayApp:
             self.on_toggle_mute(self._mute_enabled)
         self._update_menu()
 
+    def _change_language(self, language_code: str) -> None:
+        """Change the application language."""
+        if localization.set_language(language_code):
+            if self.on_change_language:
+                self.on_change_language(language_code)
+            self._update_menu()
+            # Update tooltip
+            if self._icon:
+                self._icon.title = self._get_tooltip()
+
     def _quit(self) -> None:
         """Handle quit action."""
         if self.on_quit:
@@ -241,6 +285,12 @@ class TrayApp:
         """Increment the transcription counter."""
         self._transcription_count += 1
         self._update_menu()
+
+    def refresh_ui(self) -> None:
+        """Refresh the UI after language change."""
+        if self._icon:
+            self._icon.title = self._get_tooltip()
+            self._update_menu()
 
     def start(self) -> None:
         """Start the tray application in a background thread."""

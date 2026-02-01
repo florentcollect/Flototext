@@ -14,6 +14,7 @@ from .core.transcriber import Transcriber
 from .core.text_inserter import TextInserter
 from .core.text_corrector import TextCorrector
 from .core.audio_muter import AudioMuter
+from .core.localization import localization
 from .storage.database import Database
 from .storage.models import Transcription
 from .ui.tray_app import TrayApp, AppState
@@ -56,7 +57,8 @@ class FlototextApp:
             on_toggle_notifications=self._on_toggle_notifications,
             on_toggle_mute=self._on_toggle_mute,
             on_copy_last=self._on_copy_last,
-            on_edit_dictionary=self._on_edit_dictionary
+            on_edit_dictionary=self._on_edit_dictionary,
+            on_change_language=self._on_change_language
         )
 
         # Initialize hotkey manager with callbacks
@@ -236,7 +238,7 @@ class FlototextApp:
             self._notification_manager.notify_clipboard_only(last.text)
             print(f"Copied to clipboard: {last.text[:50]}...")
         else:
-            self._notification_manager.notify_error("Aucune transcription disponible")
+            self._notification_manager.notify_error(localization.get("notifications.no_transcription"))
             print("No transcription available")
 
     def _on_edit_dictionary(self) -> None:
@@ -247,7 +249,16 @@ class FlototextApp:
             os.startfile(str(dictionary_path))
         except Exception as e:
             print(f"Error opening dictionary: {e}")
-            self._notification_manager.notify_error(f"Cannot open dictionary: {e}")
+            self._notification_manager.notify_error(localization.get("errors.cannot_open_dictionary", error=str(e)))
+
+    def _on_change_language(self, language_code: str) -> None:
+        """Handle language change.
+
+        Args:
+            language_code: New language code.
+        """
+        print(f"Language changed to: {language_code} ({localization.language_name})")
+        print(f"ASR language: {localization.asr_language}")
 
     def _on_quit(self) -> None:
         """Handle quit request."""

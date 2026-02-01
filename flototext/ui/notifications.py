@@ -4,6 +4,7 @@ import threading
 from typing import Optional
 
 from ..config import config
+from ..core.localization import localization
 
 # Disable win10toast due to WNDPROC errors on modern Windows
 # Use simple print notifications instead
@@ -69,7 +70,7 @@ class NotificationManager:
         """Show notification that app is ready."""
         self._show_toast_async(
             title=config.ui.app_name,
-            message="Application ready. Press F2 to record.",
+            message=localization.get("notifications.app_ready"),
             duration=3
         )
 
@@ -77,7 +78,7 @@ class NotificationManager:
         """Show notification that model is loading."""
         self._show_toast_async(
             title=config.ui.app_name,
-            message="Loading speech recognition model...",
+            message=localization.get("notifications.model_loading"),
             duration=3
         )
 
@@ -85,7 +86,7 @@ class NotificationManager:
         """Show notification that model has loaded."""
         self._show_toast_async(
             title=config.ui.app_name,
-            message="Model loaded. Ready to transcribe!",
+            message=localization.get("notifications.model_loaded"),
             duration=3
         )
 
@@ -98,8 +99,9 @@ class NotificationManager:
         """
         # Truncate text for notification
         display_text = text[:100] + "..." if len(text) > 100 else text
+        words_label = localization.get("notifications.words_count", count=word_count)
         self._show_toast_async(
-            title=f"{config.ui.app_name} - {word_count} words",
+            title=f"{config.ui.app_name} - {words_label}",
             message=display_text,
             duration=3
         )
@@ -110,8 +112,9 @@ class NotificationManager:
         Args:
             error_message: The error message to display.
         """
+        error_title = localization.get("notifications.error_title")
         self._show_toast_async(
-            title=f"{config.ui.app_name} - Error",
+            title=f"{config.ui.app_name} - {error_title}",
             message=error_message,
             duration=5
         )
@@ -120,7 +123,7 @@ class NotificationManager:
         """Show notification that recording was too short."""
         self._show_toast_async(
             title=config.ui.app_name,
-            message="Recording too short. Please speak longer.",
+            message=localization.get("notifications.recording_too_short"),
             duration=3
         )
 
@@ -131,8 +134,9 @@ class NotificationManager:
             text: The transcribed text (will be truncated).
         """
         display_text = text[:80] + "..." if len(text) > 80 else text
+        clipboard_title = localization.get("notifications.copied_to_clipboard")
         self._show_toast_async(
-            title=f"{config.ui.app_name} - Copied to Clipboard",
+            title=f"{config.ui.app_name} - {clipboard_title}",
             message=display_text,
             duration=3
         )

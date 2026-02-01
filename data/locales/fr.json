@@ -1,0 +1,45 @@
+{
+  "language_name": "Français",
+  "asr_language": "French",
+  "menu": {
+    "status": "Status: {state}",
+    "transcriptions": "Transcriptions: {count}",
+    "copy_last": "Copier dernière transcription",
+    "edit_dictionary": "Éditer dictionnaire",
+    "sounds": "Sons",
+    "notifications": "Notifications",
+    "mute_recording": "Mute pendant enregistrement",
+    "language": "Langue",
+    "quit": "Quitter"
+  },
+  "states": {
+    "loading": "Chargement...",
+    "ready": "Prêt",
+    "recording": "Enregistrement",
+    "processing": "Traitement",
+    "error": "Erreur"
+  },
+  "tooltip": {
+    "loading": "Chargement du modèle...",
+    "ready": "Prêt (Appuyez sur F2)",
+    "recording": "Enregistrement...",
+    "processing": "Traitement...",
+    "error": "Erreur - Voir les logs"
+  },
+  "notifications": {
+    "app_ready": "Application prête. Appuyez sur F2 pour enregistrer.",
+    "model_loading": "Chargement du modèle de reconnaissance vocale...",
+    "model_loaded": "Modèle chargé. Prêt à transcrire !",
+    "recording_too_short": "Enregistrement trop court. Parlez plus longtemps.",
+    "copied_to_clipboard": "Copié dans le presse-papiers",
+    "no_transcription": "Aucune transcription disponible",
+    "error_title": "Erreur",
+    "words_count": "{count} mots"
+  },
+  "errors": {
+    "model_not_loaded": "Modèle non chargé",
+    "gpu_oom": "Mémoire GPU insuffisante. Essayez un enregistrement plus court.",
+    "transcription_error": "Erreur de transcription: {error}",
+    "cannot_open_dictionary": "Impossible d'ouvrir le dictionnaire: {error}"
+  }
+}

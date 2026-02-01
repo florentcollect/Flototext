@@ -23,7 +23,6 @@ class ModelConfig:
     device: str = "cuda:0"
     dtype: str = "bfloat16"  # Optimal for RTX 4090
     max_new_tokens: int = 512
-    language: str = "French"
 
 
 @dataclass
@@ -36,6 +35,7 @@ class HotkeyConfig:
 class UIConfig:
     """UI configuration."""
     app_name: str = "Flototext"
+    language: str = "fr"  # Language code (fr, en, etc.)
     show_notifications: bool = True
     play_sounds: bool = False
     mute_during_recording: bool = True  # Mute system audio while recording

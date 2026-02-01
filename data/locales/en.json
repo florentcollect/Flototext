@@ -1,0 +1,45 @@
+{
+  "language_name": "English",
+  "asr_language": "English",
+  "menu": {
+    "status": "Status: {state}",
+    "transcriptions": "Transcriptions: {count}",
+    "copy_last": "Copy last transcription",
+    "edit_dictionary": "Edit dictionary",
+    "sounds": "Sounds",
+    "notifications": "Notifications",
+    "mute_recording": "Mute during recording",
+    "language": "Language",
+    "quit": "Quit"
+  },
+  "states": {
+    "loading": "Loading...",
+    "ready": "Ready",
+    "recording": "Recording",
+    "processing": "Processing",
+    "error": "Error"
+  },
+  "tooltip": {
+    "loading": "Loading model...",
+    "ready": "Ready (Press F2 to record)",
+    "recording": "Recording...",
+    "processing": "Processing...",
+    "error": "Error - Check logs"
+  },
+  "notifications": {
+    "app_ready": "Application ready. Press F2 to record.",
+    "model_loading": "Loading speech recognition model...",
+    "model_loaded": "Model loaded. Ready to transcribe!",
+    "recording_too_short": "Recording too short. Please speak longer.",
+    "copied_to_clipboard": "Copied to clipboard",
+    "no_transcription": "No transcription available",
+    "error_title": "Error",
+    "words_count": "{count} words"
+  },
+  "errors": {
+    "model_not_loaded": "Model not loaded",
+    "gpu_oom": "GPU out of memory. Please try a shorter recording.",
+    "transcription_error": "Transcription error: {error}",
+    "cannot_open_dictionary": "Cannot open dictionary: {error}"
+  }
+}
