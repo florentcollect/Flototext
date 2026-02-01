@@ -1,0 +1,25 @@
+# Flototext - Voice Recognition Application
+# Python 3.10+ required
+
+# Hotkey detection
+pynput>=1.7.6
+
+# Audio recording
+sounddevice>=0.4.6
+numpy>=1.24.0
+
+# ASR Model - Qwen3-ASR
+qwen-asr
+torch>=2.0.0
+torchaudio>=2.0.0
+
+# System tray icon
+pystray>=0.19.5
+Pillow>=10.0.0
+
+# Text insertion
+pyperclip>=1.8.2
+pyautogui>=0.9.54
+
+# Windows notifications
+win10toast>=0.9
