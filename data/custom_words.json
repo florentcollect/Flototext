@@ -4,7 +4,15 @@
     "anthropique": "Anthropic",
     "pie torche": "PyTorch",
     "tensor flot": "TensorFlow",
-    "gpt quatre": "GPT-4"
+    "gpt quatre": "GPT-4",
+    "geek power": "Geek Powa",
+    "geek, power": "Geek Powa",
+    "geekpoa": "Geek Powa",
+    "geekpois": "Geek Powa",
+    "geek, powa": "Geek Powa",
+    "geek, powa.": "Geek Powa",
+    "Guipowa": "Geek Powa",
+    "mechanone": "mecarun"
   },
-  "_comment": "Add your custom word corrections here. Keys are what the ASR outputs, values are the correct spelling."
+  "_comment": "Add your custom word corrections here. Keys are what the ASR outputs (lowercase), values are the correct spelling."
 }

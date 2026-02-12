@@ -210,6 +210,8 @@ class FlototextApp:
             enabled: Whether sounds are enabled.
         """
         self._sound_manager.set_enabled(enabled)
+        config.ui.play_sounds = enabled
+        config.save_settings()
         print(f"Sounds {'enabled' if enabled else 'disabled'}")
 
     def _on_toggle_notifications(self, enabled: bool) -> None:
@@ -219,6 +221,8 @@ class FlototextApp:
             enabled: Whether notifications are enabled.
         """
         self._notification_manager.set_enabled(enabled)
+        config.ui.show_notifications = enabled
+        config.save_settings()
         print(f"Notifications {'enabled' if enabled else 'disabled'}")
 
     def _on_toggle_mute(self, enabled: bool) -> None:
@@ -228,6 +232,8 @@ class FlototextApp:
             enabled: Whether muting is enabled.
         """
         self._audio_muter.set_enabled(enabled)
+        config.ui.mute_during_recording = enabled
+        config.save_settings()
         print(f"Mute during recording {'enabled' if enabled else 'disabled'}")
 
     def _on_copy_last(self) -> None:

@@ -83,6 +83,7 @@ class Localization:
 
         self._current_language = language_code
         config.ui.language = language_code
+        config.save_settings()
         self._load_translations()
 
         # Notify listeners
