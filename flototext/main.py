@@ -20,6 +20,7 @@ from .storage.models import Transcription
 from .ui.tray_app import TrayApp, AppState
 from .ui.notifications import NotificationManager
 from .ui.sounds import SoundManager
+from .ui.dictionary_editor import DictionaryEditor
 
 
 class FlototextApp:
@@ -37,6 +38,7 @@ class FlototextApp:
         self._text_inserter = TextInserter()
         self._text_corrector = TextCorrector()
         self._audio_muter = AudioMuter(enabled=config.ui.mute_during_recording)
+        self._dictionary_editor = DictionaryEditor(self._text_corrector)
 
         # Initialize transcriber with callbacks
         self._transcriber = Transcriber(
@@ -248,14 +250,9 @@ class FlototextApp:
             print("No transcription available")
 
     def _on_edit_dictionary(self) -> None:
-        """Open the custom words dictionary file for editing."""
-        dictionary_path = self._text_corrector.dictionary_file
-        print(f"Opening dictionary: {dictionary_path}")
-        try:
-            os.startfile(str(dictionary_path))
-        except Exception as e:
-            print(f"Error opening dictionary: {e}")
-            self._notification_manager.notify_error(localization.get("errors.cannot_open_dictionary", error=str(e)))
+        """Open the visual dictionary editor."""
+        print("Opening dictionary editor")
+        self._dictionary_editor.open()
 
     def _on_change_language(self, language_code: str) -> None:
         """Handle language change.

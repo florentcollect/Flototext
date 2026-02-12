@@ -36,6 +36,15 @@
     "error_title": "Erreur",
     "words_count": "{count} mots"
   },
+  "dictionary": {
+    "title": "Dictionnaire personnalisé",
+    "col_heard": "Ce que l'IA entend",
+    "col_correction": "Correction",
+    "label_heard": "Entendu :",
+    "label_correction": "Corriger en :",
+    "btn_add": "Ajouter / Modifier",
+    "btn_delete": "Supprimer"
+  },
   "errors": {
     "model_not_loaded": "Modèle non chargé",
     "gpu_oom": "Mémoire GPU insuffisante. Essayez un enregistrement plus court.",

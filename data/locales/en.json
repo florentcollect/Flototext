@@ -36,6 +36,15 @@
     "error_title": "Error",
     "words_count": "{count} words"
   },
+  "dictionary": {
+    "title": "Custom Dictionary",
+    "col_heard": "What the AI hears",
+    "col_correction": "Correction",
+    "label_heard": "Heard:",
+    "label_correction": "Replace with:",
+    "btn_add": "Add / Update",
+    "btn_delete": "Delete"
+  },
   "errors": {
     "model_not_loaded": "Model not loaded",
     "gpu_oom": "GPU out of memory. Please try a shorter recording.",
