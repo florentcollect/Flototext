@@ -80,7 +80,7 @@ class AudioMuter:
         Returns:
             True if unmuted successfully.
         """
-        if not self.enabled or not HAS_PYCAW or not self._volume_interface:
+        if not HAS_PYCAW or not self._volume_interface:
             return False
 
         with self._lock:
@@ -103,10 +103,12 @@ class AudioMuter:
         Args:
             enabled: Whether to enable muting.
         """
-        self.enabled = enabled
-        # If disabling while muted, unmute first
+        # If disabling while muted, restore audio before changing the flag.
+        # unmute() intentionally ignores self.enabled so cleanup can always
+        # restore audio if this instance muted it earlier.
         if not enabled and self._is_muted_by_us:
             self.unmute()
+        self.enabled = enabled
 
     @property
     def is_available(self) -> bool:

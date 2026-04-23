@@ -4,6 +4,9 @@ CLAUDE.md
 
 # Python
 __pycache__/
+tests/tmp*/
+tests/artifacts/*
+!tests/artifacts/.gitkeep
 *.py[cod]
 *$py.class
 *.so

@@ -24,6 +24,8 @@ class ModelConfig:
     device: str = "cuda:0"
     dtype: str = "bfloat16"  # Optimal for RTX 4090
     max_new_tokens: int = 512
+    dry_run: bool = field(default_factory=lambda: os.getenv("FLOTOTEXT_DRY_RUN", "").lower() in {"1", "true", "yes", "on"})
+    dry_run_text: str = "test dry-run deux-cent euros"
 
 
 @dataclass

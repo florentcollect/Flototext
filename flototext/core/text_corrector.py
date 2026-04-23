@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 from ..config import config
+from .number_normalizer import normalize_french_numbers
 
 
 class TextCorrector:
@@ -61,9 +62,11 @@ class TextCorrector:
         sorted_keys = sorted(self._corrections.keys(), key=len, reverse=True)
         # Escape special regex characters and join with |
         escaped = [re.escape(k) for k in sorted_keys]
-        # Case-insensitive word boundary matching
+        # Match complete words/phrases without requiring the correction to
+        # start or end with a word character. This keeps punctuation keys like
+        # "gitpo." usable while avoiding replacements inside larger words.
         self._pattern = re.compile(
-            r'\b(' + '|'.join(escaped) + r')\b',
+            r'(?<!\w)(' + '|'.join(escaped) + r')(?!\w)',
             re.IGNORECASE
         )
 
@@ -76,7 +79,12 @@ class TextCorrector:
         Returns:
             Corrected text with custom word replacements applied.
         """
-        if not text or not self._pattern or not self._corrections:
+        if not text:
+            return text
+
+        text = normalize_french_numbers(text)
+
+        if not self._pattern or not self._corrections:
             return text
 
         def replace_match(match: re.Match) -> str:

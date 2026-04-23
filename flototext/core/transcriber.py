@@ -24,16 +24,19 @@ class Transcriber:
     def __init__(
         self,
         on_model_loaded: Optional[Callable] = None,
-        on_error: Optional[Callable[[str], None]] = None
+        on_error: Optional[Callable[[str], None]] = None,
+        dry_run: Optional[bool] = None
     ):
         """Initialize the transcriber.
 
         Args:
             on_model_loaded: Callback when model is loaded.
             on_error: Callback when an error occurs.
+            dry_run: Whether to skip model loading and return sample text.
         """
         self.on_model_loaded = on_model_loaded
         self.on_error = on_error
+        self._dry_run = config.model.dry_run if dry_run is None else dry_run
 
         self._model = None
         self._model_loaded = False
@@ -65,6 +68,14 @@ class Transcriber:
                 return
 
             self._loading = True
+
+        if self._dry_run:
+            self._model_loaded = True
+            self._loading = False
+            print("Dry-run mode enabled; skipping ASR model load")
+            if self.on_model_loaded:
+                self.on_model_loaded()
+            return
 
         try:
             import torch
@@ -127,6 +138,13 @@ class Transcriber:
                 error=localization.get("errors.model_not_loaded")
             )
 
+        if self._dry_run:
+            return TranscriptionResult(
+                text=config.model.dry_run_text,
+                language=localization.asr_language,
+                success=True
+            )
+
         try:
             import torch
 
@@ -169,8 +187,6 @@ class Transcriber:
             import torch
             torch.cuda.empty_cache()
             error_msg = localization.get("errors.gpu_oom")
-            if self.on_error:
-                self.on_error(error_msg)
             return TranscriptionResult(
                 text="",
                 language=localization.asr_language,
@@ -181,8 +197,6 @@ class Transcriber:
         except Exception as e:
             error_msg = localization.get("errors.transcription_error", error=str(e))
             print(error_msg)
-            if self.on_error:
-                self.on_error(error_msg)
             return TranscriptionResult(
                 text="",
                 language=localization.asr_language,
