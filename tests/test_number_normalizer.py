@@ -24,6 +24,13 @@ class NumberNormalizerTests(unittest.TestCase):
             "je veux 2 pommes rouges",
         )
 
+    def test_preserves_standalone_un_and_une_as_words(self):
+        self.assertEqual(normalize_french_numbers("un ou une option"), "un ou une option")
+        self.assertEqual(normalize_french_numbers("un texte classique"), "un texte classique")
+
+    def test_keeps_un_as_digit_in_compound_numbers(self):
+        self.assertEqual(normalize_french_numbers("vingt et un jours"), "21 jours")
+
 
 if __name__ == "__main__":
     unittest.main()

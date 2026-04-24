@@ -63,7 +63,11 @@ def normalize_french_numbers(text: str) -> str:
         return text
 
     def replace_match(match: re.Match) -> str:
-        value = parse_french_number(match.group(0))
+        phrase = match.group(0)
+        if _tokenize(phrase) in (["un"], ["une"]):
+            return phrase
+
+        value = parse_french_number(phrase)
         return str(value) if value is not None else match.group(0)
 
     return NUMBER_PATTERN.sub(replace_match, text)
