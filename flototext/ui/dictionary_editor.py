@@ -1,7 +1,7 @@
 """Visual dictionary editor using tkinter."""
 
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk
 import threading
 from typing import Optional
 
@@ -14,18 +14,59 @@ class DictionaryEditor:
 
     def __init__(self, text_corrector: TextCorrector):
         self._corrector = text_corrector
-        self._window: Optional[tk.Tk] = None
+        self._root: Optional[tk.Tk] = None
+        self._window: Optional[tk.Toplevel] = None
+        self._tree: Optional[ttk.Treeview] = None
+        self._heard_var: Optional[tk.StringVar] = None
+        self._correction_var: Optional[tk.StringVar] = None
+        self._heard_entry: Optional[tk.Entry] = None
+        self._correction_entry: Optional[tk.Entry] = None
+        self._delete_btn: Optional[tk.Button] = None
+        self._ready_event = threading.Event()
+        self._gui_thread: Optional[threading.Thread] = None
+        self._lock = threading.Lock()
 
     def open(self) -> None:
-        """Open the editor in a new thread."""
-        if self._window is not None:
-            return
-        thread = threading.Thread(target=self._run, daemon=True)
-        thread.start()
+        """Request the editor window to be shown."""
+        with self._lock:
+            if self._gui_thread is None or not self._gui_thread.is_alive():
+                self._ready_event.clear()
+                self._gui_thread = threading.Thread(target=self._run_gui_loop, daemon=True)
+                self._gui_thread.start()
+                # Wait for the Tk root to be ready before scheduling the window
+                self._ready_event.wait(timeout=5.0)
 
-    def _run(self) -> None:
-        """Build and run the editor window."""
-        self._window = tk.Tk()
+            if self._root is not None:
+                self._root.after(0, self._show_window)
+
+    def _run_gui_loop(self) -> None:
+        """Persistent GUI thread that owns the single Tk root."""
+        self._root = tk.Tk()
+        self._root.withdraw()
+        self._ready_event.set()
+        try:
+            self._root.mainloop()
+        finally:
+            self._root = None
+            self._window = None
+
+    def _show_window(self) -> None:
+        """Show or rebuild the editor window (runs in GUI thread)."""
+        if self._window is not None:
+            try:
+                self._window.deiconify()
+                self._window.lift()
+                self._window.focus_force()
+                self._populate()
+                return
+            except tk.TclError:
+                self._window = None
+
+        self._build_window()
+
+    def _build_window(self) -> None:
+        """Build the Toplevel editor window (runs in GUI thread)."""
+        self._window = tk.Toplevel(self._root)
         self._window.title(localization.get("dictionary.title"))
         self._window.geometry("560x420")
         self._window.resizable(True, True)
@@ -42,7 +83,10 @@ class DictionaryEditor:
         self._window.configure(bg=bg)
 
         style = ttk.Style(self._window)
-        style.theme_use("clam")
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
         style.configure("Treeview",
                         background=entry_bg, foreground=fg,
                         fieldbackground=entry_bg, rowheight=26,
@@ -110,10 +154,10 @@ class DictionaryEditor:
                         activeforeground=fg, font=font, relief="flat",
                         bd=0, padx=12, pady=6, cursor="hand2")
 
-        self._add_btn = tk.Button(btn_frame,
-                                  text=localization.get("dictionary.btn_add"),
-                                  command=self._add, **btn_opts)
-        self._add_btn.pack(side=tk.LEFT, padx=(0, 5))
+        add_btn = tk.Button(btn_frame,
+                            text=localization.get("dictionary.btn_add"),
+                            command=self._add, **btn_opts)
+        add_btn.pack(side=tk.LEFT, padx=(0, 5))
 
         self._delete_btn = tk.Button(btn_frame,
                                      text=localization.get("dictionary.btn_delete"),
@@ -127,10 +171,13 @@ class DictionaryEditor:
 
         self._populate()
         self._heard_entry.focus_set()
-        self._window.mainloop()
+        self._window.lift()
+        self._window.focus_force()
 
     def _populate(self) -> None:
         """Fill the table with current corrections."""
+        if self._tree is None:
+            return
         for item in self._tree.get_children():
             self._tree.delete(item)
         for heard, correction in sorted(self._corrector.get_corrections().items()):
@@ -175,6 +222,16 @@ class DictionaryEditor:
         self._delete_btn.configure(state=tk.DISABLED)
 
     def _on_close(self) -> None:
-        """Handle window close."""
-        self._window.destroy()
-        self._window = None
+        """Handle window close — destroy Toplevel but keep Tk root alive."""
+        if self._window is not None:
+            try:
+                self._window.destroy()
+            except tk.TclError:
+                pass
+            self._window = None
+        self._tree = None
+        self._heard_var = None
+        self._correction_var = None
+        self._heard_entry = None
+        self._correction_entry = None
+        self._delete_btn = None
