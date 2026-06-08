@@ -56,7 +56,8 @@ class TrayApp:
         on_toggle_mute: Optional[Callable[[bool], None]] = None,
         on_copy_last: Optional[Callable] = None,
         on_edit_dictionary: Optional[Callable] = None,
-        on_change_language: Optional[Callable[[str], None]] = None
+        on_change_language: Optional[Callable[[str], None]] = None,
+        on_change_asr_backend: Optional[Callable[[str], None]] = None
     ):
         """Initialize the tray application.
 
@@ -68,6 +69,7 @@ class TrayApp:
             on_copy_last: Callback to copy last transcription to clipboard.
             on_edit_dictionary: Callback to edit custom words dictionary.
             on_change_language: Callback when language is changed.
+            on_change_asr_backend: Callback when the ASR backend is changed.
         """
         self.on_quit = on_quit
         self.on_toggle_sounds = on_toggle_sounds
@@ -76,6 +78,7 @@ class TrayApp:
         self.on_copy_last = on_copy_last
         self.on_edit_dictionary = on_edit_dictionary
         self.on_change_language = on_change_language
+        self.on_change_asr_backend = on_change_asr_backend
 
         self._icon: Optional[pystray.Icon] = None
         self._state = AppState.LOADING
@@ -176,6 +179,32 @@ class TrayApp:
             )
         return Menu(*items)
 
+    def _create_asr_model_menu(self) -> Menu:
+        """Create the ASR backend selection submenu (radio: Qwen / Canary)."""
+        backends = [
+            ("qwen", localization.get("menu.asr_qwen")),
+            ("canary", localization.get("menu.asr_canary")),
+        ]
+        items = []
+        for backend_id, name in backends:
+            def make_callback(bid):
+                def callback():
+                    self._change_asr_backend(bid)
+                return callback
+            def make_checked(bid):
+                def checked(item):
+                    return config.model.backend == bid
+                return checked
+            items.append(
+                MenuItem(
+                    name,
+                    make_callback(backend_id),
+                    checked=make_checked(backend_id),
+                    radio=True
+                )
+            )
+        return Menu(*items)
+
     def _create_menu(self) -> Menu:
         """Create the context menu for the tray icon."""
         return Menu(
@@ -218,6 +247,10 @@ class TrayApp:
             MenuItem(
                 localization.get("menu.language"),
                 self._create_language_menu()
+            ),
+            MenuItem(
+                localization.get("menu.asr_model"),
+                self._create_asr_model_menu()
             ),
             Menu.SEPARATOR,
             MenuItem(
@@ -266,6 +299,14 @@ class TrayApp:
             # Update tooltip
             if self._icon:
                 self._icon.title = self._get_tooltip()
+
+    def _change_asr_backend(self, backend: str) -> None:
+        """Change the active ASR backend (engine swap happens in main.py)."""
+        if config.model.backend == backend:
+            return
+        if self.on_change_asr_backend:
+            self.on_change_asr_backend(backend)
+        self._update_menu()
 
     def _quit(self) -> None:
         """Handle quit action."""

@@ -1,4 +1,11 @@
-"""Transcription module using Qwen3-ASR model."""
+"""Transcription module.
+
+Thin orchestration layer around a pluggable ASR backend (Qwen or Canary). The
+backend is selected from ``config.model.backend``; this class keeps the audio
+normalization, dry-run handling, OOM recovery and the public
+``transcribe(audio_data, sample_rate) -> TranscriptionResult`` contract stable
+regardless of which engine is loaded.
+"""
 
 import threading
 import numpy as np
@@ -7,6 +14,7 @@ from dataclasses import dataclass
 
 from ..config import config
 from .localization import localization
+from .asr_backends import create_backend, BaseASRBackend
 
 
 @dataclass
@@ -19,7 +27,7 @@ class TranscriptionResult:
 
 
 class Transcriber:
-    """Transcribes audio using Qwen3-ASR model."""
+    """Transcribes audio using the configured ASR backend."""
 
     def __init__(
         self,
@@ -38,7 +46,7 @@ class Transcriber:
         self.on_error = on_error
         self._dry_run = config.model.dry_run if dry_run is None else dry_run
 
-        self._model = None
+        self._backend: Optional[BaseASRBackend] = None
         self._model_loaded = False
         self._loading = False
         self._lock = threading.Lock()
@@ -53,6 +61,11 @@ class Transcriber:
         """Check if model is currently loading."""
         return self._loading
 
+    @property
+    def backend_name(self) -> Optional[str]:
+        """Name of the currently loaded backend, if any."""
+        return self._backend.name if self._backend else None
+
     def load_model_async(self) -> None:
         """Load the model in a background thread."""
         if self._loading or self._model_loaded:
@@ -62,7 +75,7 @@ class Transcriber:
         thread.start()
 
     def _load_model(self) -> None:
-        """Load the Qwen3-ASR model."""
+        """Load the ASR backend selected in the configuration."""
         with self._lock:
             if self._model_loaded:
                 return
@@ -78,28 +91,11 @@ class Transcriber:
             return
 
         try:
-            import torch
-            from qwen_asr import Qwen3ASRModel
+            backend = create_backend(config.model.backend)
+            print(f"Loading ASR backend: {backend.name}")
+            backend.load()
 
-            print(f"Loading model: {config.model.model_name}")
-
-            # Determine dtype
-            dtype_map = {
-                "bfloat16": torch.bfloat16,
-                "float16": torch.float16,
-                "float32": torch.float32,
-            }
-            dtype = dtype_map.get(config.model.dtype, torch.bfloat16)
-
-            # Load model using qwen-asr API
-            self._model = Qwen3ASRModel.from_pretrained(
-                config.model.model_name,
-                dtype=dtype,
-                device_map=config.model.device,
-                max_inference_batch_size=1,
-                max_new_tokens=config.model.max_new_tokens,
-            )
-
+            self._backend = backend
             self._model_loaded = True
             self._loading = False
 
@@ -115,6 +111,17 @@ class Transcriber:
 
             if self.on_error:
                 self.on_error(error_msg)
+
+    def reload_backend(self) -> None:
+        """Switch ASR engine: unload the current backend and reload from config.
+
+        Used when the user changes the backend at runtime. Loading happens in a
+        background thread; ``on_model_loaded`` fires again when ready.
+        """
+        self.cleanup()
+        self._model_loaded = False
+        self._loading = False
+        self.load_model_async()
 
     def transcribe(
         self,
@@ -158,20 +165,14 @@ class Transcriber:
                 # Normalize to [-1, 1] range for better ASR performance
                 audio_data = audio_data / max_val
 
-            # Transcribe using Qwen3-ASR
-            # The model accepts (np.ndarray, sample_rate) tuples
-            results = self._model.transcribe(
-                audio=(audio_data, sample_rate),
-                language=localization.asr_language,
+            # Delegate to the active backend. Each backend uses the language form
+            # it understands (Qwen: "French", Canary: "fr").
+            transcription, detected_language = self._backend.transcribe(
+                audio_data,
+                sample_rate,
+                localization.asr_language,
+                localization.asr_language_code,
             )
-
-            # Get the transcription result
-            if results and len(results) > 0:
-                transcription = results[0].text.strip()
-                detected_language = results[0].language or localization.asr_language
-            else:
-                transcription = ""
-                detected_language = localization.asr_language
 
             # Clear CUDA cache to free memory
             if torch.cuda.is_available():
@@ -179,7 +180,7 @@ class Transcriber:
 
             return TranscriptionResult(
                 text=transcription,
-                language=detected_language,
+                language=detected_language or localization.asr_language,
                 success=True
             )
 
@@ -209,9 +210,9 @@ class Transcriber:
         try:
             import torch
 
-            if self._model is not None:
-                del self._model
-                self._model = None
+            if self._backend is not None:
+                self._backend.cleanup()
+                self._backend = None
 
             self._model_loaded = False
 

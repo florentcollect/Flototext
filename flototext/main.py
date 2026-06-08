@@ -41,9 +41,13 @@ class FlototextApp:
         self._dictionary_editor = DictionaryEditor(self._text_corrector)
 
         # Initialize transcriber with callbacks
+        # Note: the transcriber's on_error callback is only fired on model LOAD
+        # failure (transcribe() returns a result instead). Load failures must NOT
+        # reset the icon to IDLE/green, otherwise the app looks "ready" while the
+        # model is missing and F2 silently does nothing.
         self._transcriber = Transcriber(
             on_model_loaded=self._on_model_loaded,
-            on_error=self._on_transcription_error
+            on_error=self._on_model_load_error
         )
 
         # Initialize audio recorder with callbacks
@@ -60,7 +64,8 @@ class FlototextApp:
             on_toggle_mute=self._on_toggle_mute,
             on_copy_last=self._on_copy_last,
             on_edit_dictionary=self._on_edit_dictionary,
-            on_change_language=self._on_change_language
+            on_change_language=self._on_change_language,
+            on_change_asr_backend=self._on_change_asr_backend
         )
 
         # Initialize hotkey manager with callbacks
@@ -81,8 +86,25 @@ class FlototextApp:
         self._sound_manager.play_ready()
         self._notification_manager.notify_model_loaded()
 
+    def _on_model_load_error(self, error: str) -> None:
+        """Handle model loading failure.
+
+        Unlike a transcription error, the icon must stay in the ERROR state: the
+        model is not loaded, so the app is NOT ready and F2 cannot work. Resetting
+        to IDLE (green) here would falsely signal readiness.
+
+        Args:
+            error: Error message.
+        """
+        print(f"Model load error: {error}")
+        self._tray_app.set_state(AppState.ERROR)
+        self._sound_manager.play_error()
+        self._notification_manager.notify_error(error)
+
     def _on_transcription_error(self, error: str) -> None:
         """Handle transcription error.
+
+        The model is still loaded, so return to IDLE after showing the error.
 
         Args:
             error: Error message.
@@ -262,6 +284,28 @@ class FlototextApp:
         """
         print(f"Language changed to: {language_code} ({localization.language_name})")
         print(f"ASR language: {localization.asr_language}")
+
+    def _on_change_asr_backend(self, backend: str) -> None:
+        """Handle ASR backend change: persist the choice and reload the engine.
+
+        Args:
+            backend: New backend id ("qwen" or "canary").
+        """
+        if backend == config.model.backend:
+            return
+
+        if self._processing:
+            print("Cannot switch ASR backend while a transcription is running")
+            return
+
+        print(f"Switching ASR backend to: {backend}")
+        config.model.backend = backend
+        config.save_settings()
+
+        # The new engine has to load before F2 works again -> show LOADING.
+        self._tray_app.set_state(AppState.LOADING)
+        self._notification_manager.notify_model_loading()
+        self._transcriber.reload_backend()
 
     def _on_quit(self) -> None:
         """Handle quit request."""

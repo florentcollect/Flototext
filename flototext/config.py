@@ -19,8 +19,10 @@ class AudioConfig:
 
 @dataclass
 class ModelConfig:
-    """Qwen3-ASR model configuration."""
-    model_name: str = "Qwen/Qwen3-ASR-1.7B"
+    """ASR model configuration."""
+    backend: str = "qwen"  # Active ASR engine: "qwen" or "canary"
+    model_name: str = "Qwen/Qwen3-ASR-1.7B"  # Qwen backend model id
+    canary_model_name: str = "nemo-canary-1b-v2"  # Canary backend (onnx-asr) model name
     device: str = "cuda:0"
     dtype: str = "bfloat16"  # Optimal for RTX 4090
     max_new_tokens: int = 512
@@ -101,6 +103,10 @@ class Config:
                 self.ui.show_notifications = ui["show_notifications"]
             if "mute_during_recording" in ui:
                 self.ui.mute_during_recording = ui["mute_during_recording"]
+            # Model section is optional; legacy settings without it keep the default.
+            model = data.get("model", {})
+            if "backend" in model:
+                self.model.backend = model["backend"]
         except (json.JSONDecodeError, IOError) as e:
             print(f"Warning: Could not load settings: {e}")
 
@@ -112,6 +118,9 @@ class Config:
                 "play_sounds": self.ui.play_sounds,
                 "show_notifications": self.ui.show_notifications,
                 "mute_during_recording": self.ui.mute_during_recording,
+            },
+            "model": {
+                "backend": self.model.backend,
             }
         }
         try:

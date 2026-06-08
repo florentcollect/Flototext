@@ -10,8 +10,27 @@ numpy>=1.24.0
 
 # ASR Model - Qwen3-ASR
 qwen-asr
+# Pinned: qwen-asr 0.0.6 exige transformers==4.57.6. Ne PAS laisser pip upgrader
+# transformers vers 5.x (incompatible -> crash import "Either a revision or a
+# version must be specified."). kernels<0.13 / huggingface-hub<1 vont de pair.
+transformers==4.57.6
+kernels<0.13
+huggingface-hub<1
 torch>=2.0.0
 torchaudio>=2.0.0
+
+# ASR Model - NVIDIA Canary 1B v2 (ONNX backend, alternative to Qwen)
+# onnx-asr is lightweight (onnxruntime + numpy) and cohabits with the pinned
+# transformers above. Use onnxruntime-gpu for CUDA; fall back to plain
+# onnxruntime on a CPU-only machine.
+onnx-asr
+onnxruntime-gpu
+
+# Benchmark only (benchmarks/benchmark_asr.py) - not needed to run the app
+jiwer
+soundfile
+pyarrow
+scipy
 
 # System tray icon
 pystray>=0.19.5

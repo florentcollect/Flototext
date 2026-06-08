@@ -1,6 +1,7 @@
 {
   "language_name": "English",
   "asr_language": "English",
+  "asr_language_code": "en",
   "menu": {
     "status": "Status: {state}",
     "transcriptions": "Transcriptions: {count}",
@@ -10,6 +11,9 @@
     "notifications": "Notifications",
     "mute_recording": "Mute during recording",
     "language": "Language",
+    "asr_model": "ASR Model",
+    "asr_qwen": "Qwen3-ASR",
+    "asr_canary": "NVIDIA Canary",
     "quit": "Quit"
   },
   "states": {

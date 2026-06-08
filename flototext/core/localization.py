@@ -40,8 +40,13 @@ class Localization:
 
     @property
     def asr_language(self) -> str:
-        """Get the ASR language name for the current language."""
+        """Get the ASR language name for the current language (e.g. "French")."""
         return self._translations.get("asr_language", "English")
+
+    @property
+    def asr_language_code(self) -> str:
+        """Get the ASR ISO short code for the current language (e.g. "fr")."""
+        return self._translations.get("asr_language_code", self._current_language)
 
     @property
     def language_name(self) -> str:

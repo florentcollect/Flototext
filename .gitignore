@@ -51,3 +51,7 @@ Thumbs.db
 
 # Model cache (downloaded models)
 .cache/
+
+# Benchmark artifacts (downloaded FLEURS dataset + generated reports)
+benchmarks/data/
+benchmarks/results/

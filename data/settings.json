@@ -1,0 +1,11 @@
+{
+  "ui": {
+    "language": "fr",
+    "play_sounds": false,
+    "show_notifications": true,
+    "mute_during_recording": true
+  },
+  "model": {
+    "backend": "canary"
+  }
+}
