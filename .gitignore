@@ -36,8 +36,12 @@ env/
 # IDE
 .idea/
 .vscode/
+*.code-workspace
 *.swp
 *.swo
+
+# Wiki working copy (synced separately to the GitHub wiki)
+wiki_temp/
 
 # Database (local data)
 data/*.db

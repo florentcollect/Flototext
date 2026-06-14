@@ -45,7 +45,21 @@
     "rollistes": "rôlistes",
     "roulistes": "rôlistes",
     "relistes": "rôlistes",
-    "rolistes": "rôlistes"
+    "rolistes": "rôlistes",
+    "coule": "cool",
+    "j'ai des idées.": "JDR",
+    "je vais.": "JDR",
+    "j.-d.-e.": "JDR",
+    "j'y vais.": "jdr",
+    "meccaron": "mecarun",
+    "mais qu'avons-nous?": "mecarun",
+    "tu m'as mis carreau?": "mecarun",
+    "mais qu'arrogance?": "mecarun",
+    "mais qu'arronne?": "mecarun",
+    "mais qu'arroi?": "mécarun",
+    "mais qu'arros?": "Mécarun",
+    "mais carrément.": "Mécarun",
+    "mes caronnes.": "mécarun"
   },
   "_comment": "Add your custom word corrections here. Keys are what the ASR outputs, values are the correct spelling."
 }
