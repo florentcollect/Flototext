@@ -44,6 +44,10 @@ class AudioRecorder:
 
         self._recording = False
         self._audio_data: list = []
+        self._recorded_samples = 0
+        # Hard cap on buffered audio (config.audio.max_duration) so a stuck
+        # hotkey can't grow the buffer unbounded; extra frames are dropped.
+        self._max_samples = int(config.audio.max_duration * self.sample_rate)
         self._stream: Optional[sd.InputStream] = None
         self._lock = threading.Lock()
         self._data_lock = threading.Lock()  # Separate lock for audio data access
@@ -60,7 +64,10 @@ class AudioRecorder:
             print(f"Audio status: {status}")
         if self._recording:
             with self._data_lock:
+                if self._recorded_samples >= self._max_samples:
+                    return
                 self._audio_data.append(indata.copy())
+                self._recorded_samples += len(indata)
 
     def start_recording(self) -> bool:
         """Start recording audio.
@@ -73,7 +80,9 @@ class AudioRecorder:
                 return False
 
             try:
-                self._audio_data = []
+                with self._data_lock:
+                    self._audio_data = []
+                    self._recorded_samples = 0
                 self._start_time = time.time()
 
                 self._stream = sd.InputStream(

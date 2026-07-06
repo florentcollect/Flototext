@@ -377,8 +377,33 @@ class FlototextApp:
         print("Goodbye!")
 
 
+def _setup_output() -> None:
+    """Redirect stdout/stderr to a log file when running under pythonw.exe.
+
+    pythonw gives the process no console: sys.stdout/sys.stderr are None and
+    every print() in the app is silently discarded, which makes any failure
+    impossible to diagnose. Send them to data/flototext.log instead.
+    """
+    if sys.stdout is not None and sys.stderr is not None:
+        return
+    try:
+        config.ensure_directories()
+        log_path = config.data_dir / "flototext.log"
+        # Simple rotation: start fresh once the log gets large.
+        mode = "w" if log_path.exists() and log_path.stat().st_size > 1_000_000 else "a"
+        log_file = open(log_path, mode, encoding="utf-8", buffering=1)
+        if sys.stdout is None:
+            sys.stdout = log_file
+        if sys.stderr is None:
+            sys.stderr = log_file
+        print(f"--- Flototext started {datetime.now().isoformat(timespec='seconds')} ---")
+    except OSError:
+        pass  # No console and no writable log: run silent as before.
+
+
 def main():
     """Main entry point."""
+    _setup_output()
     app = FlototextApp()
     app.start()
 

@@ -20,6 +20,7 @@ class TextCorrector:
         """
         self.dictionary_path = dictionary_path or config.data_dir / "custom_words.json"
         self._corrections: Dict[str, str] = {}
+        self._lookup: Dict[str, str] = {}  # lowercase key -> correction
         self._pattern: Optional[re.Pattern] = None
         self._load_dictionary()
 
@@ -38,6 +39,7 @@ class TextCorrector:
         except Exception as e:
             print(f"Error loading custom words dictionary: {e}")
             self._corrections = {}
+            self._build_pattern()
 
     def _create_default_dictionary(self) -> None:
         """Create a default dictionary file."""
@@ -53,7 +55,8 @@ class TextCorrector:
             print(f"Error creating default dictionary: {e}")
 
     def _build_pattern(self) -> None:
-        """Build regex pattern for efficient replacement."""
+        """Build regex pattern and lowercase lookup for efficient replacement."""
+        self._lookup = {k.lower(): v for k, v in self._corrections.items()}
         if not self._corrections:
             self._pattern = None
             return
@@ -90,17 +93,15 @@ class TextCorrector:
         def replace_match(match: re.Match) -> str:
             """Replace matched text preserving case when possible."""
             matched = match.group(0)
-            # Find the correction (case-insensitive lookup)
-            lower_matched = matched.lower()
-            for key, value in self._corrections.items():
-                if key.lower() == lower_matched:
-                    # Preserve original case pattern if single word
-                    if matched.isupper():
-                        return value.upper()
-                    elif matched[0].isupper() and len(matched) > 1:
-                        return value[0].upper() + value[1:] if len(value) > 1 else value.upper()
-                    return value
-            return matched
+            value = self._lookup.get(matched.lower())
+            if value is None:
+                return matched
+            # Preserve original case pattern if single word
+            if matched.isupper():
+                return value.upper()
+            elif matched[0].isupper() and len(matched) > 1:
+                return value[0].upper() + value[1:] if len(value) > 1 else value.upper()
+            return value
 
         return self._pattern.sub(replace_match, text)
 

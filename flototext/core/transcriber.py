@@ -152,9 +152,14 @@ class Transcriber:
                 success=True
             )
 
+        # torch is only needed for CUDA cache management (Qwen backend); the
+        # ONNX backend must keep working without it.
         try:
             import torch
+        except ImportError:
+            torch = None
 
+        try:
             # Ensure audio is float32 and normalized
             if audio_data.dtype != np.float32:
                 audio_data = audio_data.astype(np.float32)
@@ -175,7 +180,7 @@ class Transcriber:
             )
 
             # Clear CUDA cache to free memory
-            if torch.cuda.is_available():
+            if torch is not None and torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
             return TranscriptionResult(
@@ -184,18 +189,16 @@ class Transcriber:
                 success=True
             )
 
-        except torch.cuda.OutOfMemoryError:
-            import torch
-            torch.cuda.empty_cache()
-            error_msg = localization.get("errors.gpu_oom")
-            return TranscriptionResult(
-                text="",
-                language=localization.asr_language,
-                success=False,
-                error=error_msg
-            )
-
         except Exception as e:
+            if torch is not None and isinstance(e, torch.cuda.OutOfMemoryError):
+                torch.cuda.empty_cache()
+                return TranscriptionResult(
+                    text="",
+                    language=localization.asr_language,
+                    success=False,
+                    error=localization.get("errors.gpu_oom")
+                )
+
             error_msg = localization.get("errors.transcription_error", error=str(e))
             print(error_msg)
             return TranscriptionResult(
@@ -208,14 +211,16 @@ class Transcriber:
     def cleanup(self) -> None:
         """Clean up model resources."""
         try:
-            import torch
-
             if self._backend is not None:
                 self._backend.cleanup()
                 self._backend = None
 
             self._model_loaded = False
 
+            try:
+                import torch
+            except ImportError:
+                return
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 

@@ -53,6 +53,25 @@ class AudioRecorderTests(unittest.TestCase):
         self.assertEqual(result.duration, 1.0)
         np.testing.assert_array_equal(result.audio_data, np.array([0.1, 0.2, 0.3], dtype=np.float32))
 
+    @patch("flototext.core.audio_recorder.time.time", side_effect=[10.0, 11.0])
+    @patch("flototext.core.audio_recorder.sd.InputStream", FakeInputStream)
+    def test_recording_is_capped_at_max_duration(self, _time_mock):
+        recorder = AudioRecorder()
+        recorder._max_samples = 3  # Simulate a tiny max_duration
+
+        self.assertTrue(recorder.start_recording())
+        stream = FakeInputStream.instances[0]
+        stream.kwargs["callback"](np.array([[0.1], [0.2]], dtype=np.float32), 2, None, None)
+        stream.kwargs["callback"](np.array([[0.3], [0.4]], dtype=np.float32), 2, None, None)
+        # Beyond the cap: must be dropped
+        stream.kwargs["callback"](np.array([[0.5]], dtype=np.float32), 1, None, None)
+
+        result = recorder.stop_recording()
+
+        np.testing.assert_array_equal(
+            result.audio_data, np.array([0.1, 0.2, 0.3, 0.4], dtype=np.float32)
+        )
+
     @patch("flototext.core.audio_recorder.time.time", side_effect=[10.0, 10.1])
     @patch("flototext.core.audio_recorder.sd.InputStream", FakeInputStream)
     def test_short_recording_is_invalid(self, _time_mock):

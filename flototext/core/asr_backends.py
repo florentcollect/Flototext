@@ -199,4 +199,6 @@ def create_backend(name: str) -> BaseASRBackend:
     """Instantiate the backend matching ``name`` (defaults to Qwen)."""
     if name == "canary":
         return CanaryOnnxBackend()
+    if name != "qwen":
+        print(f"Unknown ASR backend '{name}', falling back to Qwen")
     return QwenBackend()
