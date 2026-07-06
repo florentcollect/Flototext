@@ -5,7 +5,7 @@ Windows voice recognition application with real-time transcription.
 ## Features
 
 - **Push-to-talk with F2**: Hold F2 to record, release to transcribe
-- **AI Transcription**: Uses Qwen3-ASR-1.7B (supports French and 52 languages)
+- **Switchable ASR engines**: NVIDIA Canary 1B v2 (default, via ONNX Runtime) or Qwen3-ASR-1.7B, swappable at runtime from the tray menu
 - **Auto-paste**: Transcribed text is automatically pasted at cursor position
 - **Custom Dictionary**: Define word corrections for technical terms, names, etc.
 - **Auto-mute**: System audio is muted during recording to prevent interference
@@ -59,7 +59,7 @@ To uninstall: Windows Settings → Apps → Flototext → Uninstall
 
 3. **Recording**:
    - Press and **hold** F2 to start recording
-   - Speak (supports 52 languages including French, English, Chinese...)
+   - Speak (French by default; Qwen also supports 50+ languages)
    - **Release** F2 to stop and transcribe
 
 4. The transcribed text will be automatically pasted at your cursor position
@@ -78,11 +78,28 @@ To uninstall: Windows Settings → Apps → Flototext → Uninstall
 
 Right-click on the icon to access options:
 - **Copy last transcription**: Copy the last transcription to clipboard
+- **ASR model**: Switch between Canary (default) and Qwen3-ASR; the model reloads on the fly and the choice is saved
 - **Edit dictionary**: Open the custom words dictionary file
 - **Sounds**: Enable/disable audio feedback
 - **Notifications**: Enable/disable Windows notifications
 - **Mute during recording**: Enable/disable system audio muting while recording
 - **Quit**: Close the application
+
+## ASR Engines
+
+Flototext ships two switchable speech-to-text backends behind a common interface
+(`flototext/core/asr_backends.py`). Switch them live from the tray menu (**ASR model**);
+the choice is persisted in `data/settings.json` under `model.backend`.
+
+| Backend | Model | Library | Notes |
+|---------|-------|---------|-------|
+| **Canary** (default) | `nemo-canary-1b-v2` | `onnx-asr` (ONNX Runtime GPU) | Lighter & ~5x faster, best WER on FLEURS fr_fr (4.6%). Expects a short language code (`fr`). |
+| Qwen | `Qwen/Qwen3-ASR-1.7B` | `qwen-asr` (transformers 4.57.6) | Multilingual (50+ languages). Expects a full language label (`French`). ~4 GB VRAM. |
+
+Benchmark them yourself (FLEURS fr_fr — WER, latency, RTF):
+```bash
+python -m benchmarks.benchmark_asr --backends canary qwen
+```
 
 ## Custom Dictionary
 
@@ -125,7 +142,8 @@ Flototext/
 │   ├── core/
 │   │   ├── hotkey_manager.py   # F2 key detection
 │   │   ├── audio_recorder.py   # Microphone capture
-│   │   ├── transcriber.py      # Qwen3-ASR model
+│   │   ├── asr_backends.py     # Canary / Qwen ASR backends (switchable)
+│   │   ├── transcriber.py      # Delegates to the selected backend
 │   │   ├── text_inserter.py    # Clipboard paste
 │   │   ├── text_corrector.py   # Custom word corrections
 │   │   └── audio_muter.py      # System audio muting
@@ -136,8 +154,11 @@ Flototext/
 │       ├── tray_app.py         # System tray icon
 │       ├── notifications.py    # Toast notifications
 │       └── sounds.py           # Audio feedback
+├── benchmarks/
+│   └── benchmark_asr.py        # FLEURS fr_fr WER / latency / RTF comparison
 ├── data/
 │   ├── transcriptions.db       # Database
+│   ├── settings.json           # User settings (incl. model.backend)
 │   └── custom_words.json       # Custom word dictionary
 ├── assets/
 │   └── icon.ico
@@ -153,7 +174,9 @@ Flototext/
 Edit `flototext/config.py` to customize:
 - `hotkey.trigger_key`: Trigger key (default: "f2")
 - `audio.sample_rate`: Sample rate (default: 16000)
-- `model.model_name`: ASR model to use
+- `model.backend`: Active ASR backend, `"canary"` (default) or `"qwen"` (persisted in `data/settings.json`)
+- `model.canary_model_name`: Canary model name (default: `nemo-canary-1b-v2`)
+- `model.model_name`: Qwen model id (default: `Qwen/Qwen3-ASR-1.7B`)
 - `ui.play_sounds`: Sounds enabled by default
 - `ui.show_notifications`: Notifications enabled by default
 - `ui.mute_during_recording`: Mute system audio while recording (default: True)
