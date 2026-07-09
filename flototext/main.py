@@ -9,7 +9,7 @@ from datetime import datetime
 
 from .config import config
 from .core.hotkey_manager import HotkeyManager
-from .core.audio_recorder import AudioRecorder
+from .core.audio_recorder import AudioRecorder, is_silent
 from .core.transcriber import Transcriber
 from .core.text_inserter import TextInserter
 from .core.text_corrector import TextCorrector
@@ -186,6 +186,17 @@ class FlototextApp:
             audio_data: Audio data as numpy array.
             duration: Recording duration in seconds.
         """
+        # A silent capture means the microphone is not the one we think it is
+        # (Windows reassigns the default input behind our back). Transcribing it
+        # anyway produces plausible-looking text from noise, which hides the
+        # fault; say so instead.
+        if is_silent(audio_data, config.audio.silence_rms_threshold):
+            print("No audio captured (silent input; check the selected microphone)")
+            self._tray_app.set_state(AppState.IDLE)
+            self._notification_manager.notify_no_audio()
+            self._sound_manager.play_error()
+            return
+
         # Transcribe
         result = self._transcriber.transcribe(audio_data, config.audio.sample_rate)
 
@@ -370,6 +381,9 @@ class FlototextApp:
 
         self._hotkey_manager.stop()
         self._audio_recorder.cleanup()
+        # Quitting mid-recording would otherwise leave the system audio muted,
+        # with nothing left running to restore it.
+        self._audio_muter.unmute()
         self._transcriber.cleanup()
         self._database.close()
         self._tray_app.stop()

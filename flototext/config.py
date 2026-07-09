@@ -15,6 +15,15 @@ class AudioConfig:
     dtype: str = "float32"
     min_duration: float = 0.5  # Minimum recording duration in seconds
     max_duration: float = 300.0  # Maximum recording duration (5 minutes)
+    # Substring of the input device name to pin (e.g. "Shure MV7"). None follows
+    # the Windows default input, which other apps are free to steal.
+    input_device: Optional[str] = None
+    # Below this RMS the capture holds no speech. Feeding silence to the ASR
+    # yields confident garbage ("<unk>", stray digits) that passes for a working
+    # transcription, so refuse it and say why instead. Sits under a measured
+    # idle noise floor (~0.002 RMS on a Shure MV7+) to never reject a quiet voice;
+    # the fault it catches is a dead stream, which reads as exactly 0.0.
+    silence_rms_threshold: float = 0.0015
 
 
 @dataclass
@@ -103,6 +112,10 @@ class Config:
                 self.ui.show_notifications = ui["show_notifications"]
             if "mute_during_recording" in ui:
                 self.ui.mute_during_recording = ui["mute_during_recording"]
+            # Audio section is optional; legacy settings without it keep the default.
+            audio = data.get("audio", {})
+            if "input_device" in audio:
+                self.audio.input_device = audio["input_device"] or None
             # Model section is optional; legacy settings without it keep the default.
             model = data.get("model", {})
             if "backend" in model:
@@ -118,6 +131,9 @@ class Config:
                 "play_sounds": self.ui.play_sounds,
                 "show_notifications": self.ui.show_notifications,
                 "mute_during_recording": self.ui.mute_during_recording,
+            },
+            "audio": {
+                "input_device": self.audio.input_device,
             },
             "model": {
                 "backend": self.model.backend,

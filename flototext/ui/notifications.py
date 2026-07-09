@@ -127,6 +127,14 @@ class NotificationManager:
             duration=3
         )
 
+    def notify_no_audio(self) -> None:
+        """Show notification that the microphone captured no sound."""
+        self._show_toast_async(
+            title=config.ui.app_name,
+            message=localization.get("notifications.no_audio"),
+            duration=5
+        )
+
     def notify_clipboard_only(self, text: str) -> None:
         """Show notification when text was copied to clipboard only.
 
