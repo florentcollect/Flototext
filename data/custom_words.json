@@ -59,7 +59,21 @@
     "mais qu'arroi?": "mécarun",
     "mais qu'arros?": "Mécarun",
     "mais carrément.": "Mécarun",
-    "mes caronnes.": "mécarun"
+    "mes caronnes.": "mécarun",
+    "la roche-turion.": "La-Roche-Sur-Yon",
+    "la roche sur réo.": "La-Roche-Sur-Yon",
+    "là, recherions.": "La-Roche-Sur-Yon",
+    "la rocherie.": "La-Roche-Sur-Yon",
+    "la roche sur l'eau.": "La-Roche-Sur-Yon",
+    "la rocherion.": "La-Roche-Sur-Yon",
+    "la roche-charieux.": "La-Roche-Sur-Yon",
+    "la roche sur rio.": "La-Roche-Sur-Yon",
+    "la roche sur une.": "La-Roche-Sur-Yon",
+    "gigpo": "geek powa",
+    "gig powa": "Geek Powa",
+    "geek boa": "Geek Powa",
+    "gig 8": "Geek Powa",
+    "geek powa a.": "Geek Powa"
   },
   "_comment": "Add your custom word corrections here. Keys are what the ASR outputs, values are the correct spelling."
 }
