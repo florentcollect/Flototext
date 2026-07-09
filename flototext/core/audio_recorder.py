@@ -10,6 +10,27 @@ from dataclasses import dataclass
 from ..config import config
 
 
+def is_silent(audio_data: np.ndarray, rms_threshold: float) -> bool:
+    """Report whether a capture carries no speech, only silence or a noise floor.
+
+    An empty buffer counts as silent: there is nothing to transcribe either way.
+
+    Args:
+        audio_data: Recorded samples.
+        rms_threshold: RMS below which the capture is considered silent.
+
+    Returns:
+        True when the audio should not be sent to the ASR.
+    """
+    if audio_data is None or audio_data.size == 0:
+        return True
+
+    samples = audio_data.astype(np.float64, copy=False)
+    rms = float(np.sqrt(np.mean(np.square(samples))))
+    # A dead stream is all zeros, which makes rms exactly 0.0 rather than NaN.
+    return not np.isfinite(rms) or rms < rms_threshold
+
+
 @dataclass
 class RecordingResult:
     """Result of an audio recording."""
@@ -58,6 +79,35 @@ class AudioRecorder:
         """Check if currently recording."""
         return self._recording
 
+    def _resolve_input_device(self) -> Optional[int]:
+        """Find the pinned input device, if one is configured.
+
+        Windows reassigns the default input whenever another app claims it, which
+        silently points the recorder at a dead virtual device. Pinning by name
+        survives that. An unmatched name falls back to the default rather than
+        refusing to record.
+
+        Returns:
+            The device index, or None to use the system default.
+        """
+        wanted = config.audio.input_device
+        if not wanted:
+            return None
+
+        needle = wanted.casefold()
+        try:
+            devices = sd.query_devices()
+        except Exception as e:
+            print(f"Could not query audio devices: {e}")
+            return None
+
+        for index, device in enumerate(devices):
+            if device['max_input_channels'] > 0 and needle in device['name'].casefold():
+                return index
+
+        print(f"Input device {wanted!r} not found, using system default")
+        return None
+
     def _audio_callback(self, indata: np.ndarray, frames: int, time_info, status):
         """Callback for audio stream."""
         if status:
@@ -89,6 +139,7 @@ class AudioRecorder:
                     samplerate=self.sample_rate,
                     channels=self.channels,
                     dtype=config.audio.dtype,
+                    device=self._resolve_input_device(),
                     callback=self._audio_callback
                 )
                 self._stream.start()

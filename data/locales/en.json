@@ -35,6 +35,7 @@
     "model_loading": "Loading speech recognition model...",
     "model_loaded": "Model loaded. Ready to transcribe!",
     "recording_too_short": "Recording too short. Please speak longer.",
+    "no_audio": "No sound captured. Check the microphone selected in Windows.",
     "copied_to_clipboard": "Copied to clipboard",
     "no_transcription": "No transcription available",
     "error_title": "Error",

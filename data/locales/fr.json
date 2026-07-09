@@ -35,6 +35,7 @@
     "model_loading": "Chargement du modèle de reconnaissance vocale...",
     "model_loaded": "Modèle chargé. Prêt à transcrire !",
     "recording_too_short": "Enregistrement trop court. Parlez plus longtemps.",
+    "no_audio": "Aucun son capté. Vérifiez le microphone sélectionné dans Windows.",
     "copied_to_clipboard": "Copié dans le presse-papiers",
     "no_transcription": "Aucune transcription disponible",
     "error_title": "Erreur",

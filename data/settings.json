@@ -5,6 +5,9 @@
     "show_notifications": true,
     "mute_during_recording": true
   },
+  "audio": {
+    "input_device": "Shure MV7"
+  },
   "model": {
     "backend": "canary"
   }
