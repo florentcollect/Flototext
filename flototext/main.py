@@ -9,7 +9,7 @@ from datetime import datetime
 
 from .config import config
 from .core.hotkey_manager import HotkeyManager
-from .core.audio_recorder import AudioRecorder, is_silent
+from .core.audio_recorder import AudioRecorder, is_silent, peak_window_rms
 from .core.transcriber import Transcriber
 from .core.text_inserter import TextInserter
 from .core.text_corrector import TextCorrector
@@ -191,7 +191,16 @@ class FlototextApp:
         # anyway produces plausible-looking text from noise, which hides the
         # fault; say so instead.
         if is_silent(audio_data, config.audio.silence_rms_threshold):
-            print("No audio captured (silent input; check the selected microphone)")
+            # Report the level and the device: the two facts needed to tell a
+            # muted microphone (level at zero) from one pinned to the wrong
+            # input, without which the only clue is text that never appears.
+            level = peak_window_rms(audio_data)
+            device = self._audio_recorder.describe_input_device()
+            print(
+                f"No audio captured (silent input; check the selected microphone) "
+                f"- peak level {level:.6f} < threshold "
+                f"{config.audio.silence_rms_threshold:.6f} on {device!r}"
+            )
             self._tray_app.set_state(AppState.IDLE)
             self._notification_manager.notify_no_audio()
             self._sound_manager.play_error()

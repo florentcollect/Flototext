@@ -10,6 +10,55 @@ from dataclasses import dataclass
 from ..config import config
 
 
+# Speech is judged over short windows rather than the whole take. A capture is
+# mostly the silence around the sentence: the user presses F2, breathes, speaks,
+# then releases. Averaging over that dilutes a real phrase below any threshold
+# tuned for a noise floor, and the longer the key is held the worse it gets.
+SILENCE_WINDOW_SECONDS = 0.25
+
+
+def peak_window_rms(
+    audio_data: np.ndarray,
+    sample_rate: int = None,
+    window_seconds: float = SILENCE_WINDOW_SECONDS,
+) -> float:
+    """Return the RMS of the loudest window in the capture.
+
+    This is the level the silence check judges: the loudest quarter-second tells
+    whether anything was ever said, where the overall mean only tells how much of
+    the take was quiet.
+
+    Args:
+        audio_data: Recorded samples.
+        sample_rate: Sample rate used to size the window (default from config).
+        window_seconds: Window length in seconds.
+
+    Returns:
+        The peak window RMS, or 0.0 for an empty or non-finite capture.
+    """
+    if audio_data is None or audio_data.size == 0:
+        return 0.0
+
+    samples = np.asarray(audio_data, dtype=np.float64).ravel()
+    if not np.all(np.isfinite(samples)):
+        return 0.0
+
+    sample_rate = sample_rate or config.audio.sample_rate
+    window = max(1, int(window_seconds * sample_rate))
+    # Shorter than one window: the whole capture is the only window there is.
+    if samples.size <= window:
+        return float(np.sqrt(np.mean(np.square(samples))))
+
+    # Mean square per window via a cumulative sum, so a five-minute take costs
+    # one pass instead of one slice per hop.
+    squares = np.square(samples)
+    cumulative = np.concatenate(([0.0], np.cumsum(squares)))
+    hop = max(1, window // 2)
+    starts = np.arange(0, samples.size - window + 1, hop)
+    means = (cumulative[starts + window] - cumulative[starts]) / window
+    return float(np.sqrt(np.max(means)))
+
+
 def is_silent(audio_data: np.ndarray, rms_threshold: float) -> bool:
     """Report whether a capture carries no speech, only silence or a noise floor.
 
@@ -25,10 +74,7 @@ def is_silent(audio_data: np.ndarray, rms_threshold: float) -> bool:
     if audio_data is None or audio_data.size == 0:
         return True
 
-    samples = audio_data.astype(np.float64, copy=False)
-    rms = float(np.sqrt(np.mean(np.square(samples))))
-    # A dead stream is all zeros, which makes rms exactly 0.0 rather than NaN.
-    return not np.isfinite(rms) or rms < rms_threshold
+    return peak_window_rms(audio_data) < rms_threshold
 
 
 @dataclass
@@ -73,6 +119,7 @@ class AudioRecorder:
         self._lock = threading.Lock()
         self._data_lock = threading.Lock()  # Separate lock for audio data access
         self._start_time: float = 0
+        self._resolved_device_name: Optional[str] = None
 
     @property
     def is_recording(self) -> bool:
@@ -103,10 +150,29 @@ class AudioRecorder:
 
         for index, device in enumerate(devices):
             if device['max_input_channels'] > 0 and needle in device['name'].casefold():
+                self._resolved_device_name = device['name']
                 return index
 
         print(f"Input device {wanted!r} not found, using system default")
+        self._resolved_device_name = None
         return None
+
+    def describe_input_device(self) -> str:
+        """Name the input actually opened, for diagnosing a silent capture.
+
+        Windows can leave a pinned name matching a device that no longer carries
+        the microphone, so a silent-capture report has to say which one it read.
+
+        Returns:
+            The resolved device name, or a description of the fallback.
+        """
+        if self._resolved_device_name:
+            return self._resolved_device_name
+
+        try:
+            return f"{sd.query_devices(kind='input')['name']} (system default)"
+        except Exception:
+            return "unknown (system default)"
 
     def _audio_callback(self, indata: np.ndarray, frames: int, time_info, status):
         """Callback for audio stream."""

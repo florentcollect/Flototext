@@ -4,7 +4,7 @@ from unittest.mock import patch
 import numpy as np
 
 from flototext.config import config
-from flototext.core.audio_recorder import AudioRecorder, is_silent
+from flototext.core.audio_recorder import AudioRecorder, is_silent, peak_window_rms
 
 
 class FakeInputStream:
@@ -114,6 +114,45 @@ class SilenceDetectionTests(unittest.TestCase):
         # quiet voice sits above it and must never be rejected.
         quiet = np.full(16000, 0.002, dtype=np.float32)
         self.assertFalse(is_silent(quiet, self.THRESHOLD))
+
+    def _speech_surrounded_by_silence(self, speech_seconds, total_seconds, level):
+        """Build a capture holding one phrase inside the usual leading/trailing gap."""
+        rng = np.random.default_rng(2)
+        capture = (rng.standard_normal(int(total_seconds * 16000)) * 0.00003)
+        start = (len(capture) - int(speech_seconds * 16000)) // 2
+        speech = rng.standard_normal(int(speech_seconds * 16000)) * level
+        capture[start:start + len(speech)] = speech
+        return capture.astype(np.float32)
+
+    def test_short_phrase_in_a_long_take_survives(self):
+        # The failure that dropped real dictations: one second of speech inside a
+        # ten-second hold averages below the threshold even though it was spoken.
+        capture = self._speech_surrounded_by_silence(1.0, 10.0, level=0.0035)
+        overall = float(np.sqrt(np.mean(capture.astype(np.float64) ** 2)))
+        self.assertLess(overall, self.THRESHOLD, "test case no longer reproduces the bug")
+        self.assertFalse(is_silent(capture, self.THRESHOLD))
+
+    def test_quiet_phrase_at_measured_level_survives(self):
+        # Levels measured on the user's under-gained MV7+: speech peaks at
+        # ~0.0025 RMS while the whole take averages ~0.0008.
+        capture = self._speech_surrounded_by_silence(1.5, 6.0, level=0.0025)
+        self.assertFalse(is_silent(capture, self.THRESHOLD))
+
+    def test_long_dead_stream_stays_silent(self):
+        # Windowing must not turn a dead five-minute stream into speech.
+        self.assertTrue(is_silent(np.zeros(300 * 16000, dtype=np.float32), self.THRESHOLD))
+
+    def test_peak_window_rms_finds_the_loudest_window(self):
+        capture = self._speech_surrounded_by_silence(1.0, 10.0, level=0.05)
+        self.assertGreater(peak_window_rms(capture), 0.03)
+
+    def test_peak_window_rms_of_empty_capture_is_zero(self):
+        self.assertEqual(peak_window_rms(np.array([], dtype=np.float32)), 0.0)
+
+    def test_non_finite_capture_is_silent(self):
+        # A driver fault can deliver NaN; it must read as silence, not speech.
+        broken = np.full(16000, np.nan, dtype=np.float32)
+        self.assertTrue(is_silent(broken, self.THRESHOLD))
 
 
 class InputDeviceResolutionTests(unittest.TestCase):
