@@ -111,6 +111,34 @@ class CanaryOnnxBackend(BaseASRBackend):
     # A proper VAD split (onnx_asr .with_vad()) is a future improvement.
     MAX_SEGMENT_SECONDS = 20.0
 
+    # Left to its defaults, ONNX Runtime reserves far more VRAM than Canary
+    # needs: measured at 8.7 GB for a model whose weights are 3.8 GB. Three
+    # defaults account for the gap, and each is pinned below.
+    #
+    #   arena_extend_strategy: kNextPowerOfTwo doubles the arena every time it
+    #       runs short and never returns the memory. kSameAsRequested grows it
+    #       by what was actually asked for.
+    #   cudnn_conv_use_max_workspace: "1" since ORT 1.14 - convolutions get the
+    #       largest workspace cuDNN will take, traded against a speed we do not
+    #       need for 20 s of speech.
+    #   cudnn_conv_algo_search: EXHAUSTIVE benchmarks every convolution
+    #       algorithm at load time, allocating each one's workspace to do it.
+    #
+    # gpu_mem_limit is a backstop, not the lever, and it caps each ONNX session
+    # rather than the process - Canary opens one for the encoder and one for the
+    # decoder. 6 GiB covers the encoder's 3.1 GiB of weights plus the activations
+    # of a single MAX_SEGMENT_SECONDS window with room to spare; raise it if a
+    # legitimate transcription ever hits the OOM path in Transcriber.transcribe().
+    #
+    # do_copy_in_default_stream already defaults to "1" and is left out on
+    # purpose: setting it changes nothing.
+    CUDA_PROVIDER_OPTIONS = {
+        "arena_extend_strategy": "kSameAsRequested",
+        "gpu_mem_limit": 6 * 1024 ** 3,
+        "cudnn_conv_algo_search": "HEURISTIC",
+        "cudnn_conv_use_max_workspace": "0",
+    }
+
     def __init__(self) -> None:
         self._model = None
 
@@ -129,15 +157,34 @@ class CanaryOnnxBackend(BaseASRBackend):
         available = ort.get_available_providers()
         providers = None
         if "CUDAExecutionProvider" in available:
-            providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+            # onnx_asr passes this straight to InferenceSession, which accepts
+            # a (provider, options) tuple alongside plain provider names.
+            providers = [
+                ("CUDAExecutionProvider", self.CUDA_PROVIDER_OPTIONS),
+                "CPUExecutionProvider",
+            ]
+
+        # onnx-asr's Resampler builds one InferenceSession per source sample rate
+        # (8/11/22/24/32/44.1/48 kHz) and only excludes TensorRT, so all seven
+        # land on CUDA with their own arena and cuBLAS/cuDNN handles. None of
+        # them ever runs: we always feed 16 kHz, and Resampler.__call__ returns
+        # its input untouched when the rate already matches. Keep them on CPU.
+        resampler_config = {"providers": ["CPUExecutionProvider"]}
 
         print(f"Loading Canary ONNX model: {config.model.canary_model_name} "
-              f"(providers={providers or 'default'})")
+              f"(providers={'CUDA (capped)' if providers else 'default'})")
         # Downloads the ONNX weights from Hugging Face on first run, then caches.
         if providers:
-            self._model = onnx_asr.load_model(config.model.canary_model_name, providers=providers)
+            self._model = onnx_asr.load_model(
+                config.model.canary_model_name,
+                providers=providers,
+                resampler_config=resampler_config,
+            )
         else:
-            self._model = onnx_asr.load_model(config.model.canary_model_name)
+            self._model = onnx_asr.load_model(
+                config.model.canary_model_name,
+                resampler_config=resampler_config,
+            )
         print("Canary model loaded successfully")
 
     def transcribe(self, audio, sample_rate, language_label, language_code):
