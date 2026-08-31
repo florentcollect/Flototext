@@ -83,4 +83,4 @@ class VramBudgetSettingsTests(unittest.TestCase):
 
             self.assertEqual(reloaded.model.backend, "canary")
             self.assertEqual(reloaded.model.idle_unload_seconds, 900)
-            self.assertEqual(reloaded.model.vram_budget_gb, 5.0)
+            self.assertEqual(reloaded.model.vram_budget_gb, 6.0)

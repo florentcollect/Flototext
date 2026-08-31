@@ -49,7 +49,7 @@ class ModelConfig:
     # A shared env allocator would give a hard cap, but it keeps its memory when
     # sessions are dropped - measured - which would defeat the idle unload.
     # 0 disables the budget check.
-    vram_budget_gb: float = 5.0
+    vram_budget_gb: float = 6.0
     # How long without a transcription counts as a lull, when over budget.
     over_budget_idle_seconds: int = 120
     dry_run: bool = field(default_factory=lambda: os.getenv("FLOTOTEXT_DRY_RUN", "").lower() in {"1", "true", "yes", "on"})
