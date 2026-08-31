@@ -118,7 +118,14 @@
     "mölche.": "Mulch",
     "barn rp": "BardeRP",
     "barbe rp.": "BardeRP",
-    "bard rp.": "BardeRP"
+    "bard rp.": "BardeRP",
+    "midjournée": "midjourney",
+    "mülch": "Mulch",
+    "mölch": "Mulch",
+    "jdr": "JDR",
+    "gidère": "JDR",
+    "gipowa": "Geek Powa",
+    "méccaronne": "mecarun"
   },
   "_comment": "Add your custom word corrections here. Keys are what the ASR outputs, values are the correct spelling."
 }
