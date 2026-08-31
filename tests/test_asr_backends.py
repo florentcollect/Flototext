@@ -97,7 +97,7 @@ class CanaryLoadOptionsTests(unittest.TestCase):
         self.assertEqual(options["cudnn_conv_algo_search"], "HEURISTIC")
         # "1" (the default) offers cuDNN all free VRAM as convolution workspace.
         self.assertEqual(options["cudnn_conv_use_max_workspace"], "0")
-        self.assertEqual(options["gpu_mem_limit"], 6 * 1024 ** 3)
+        self.assertEqual(options["gpu_mem_limit"], 4 * 1024 ** 3)
         # Already the default: setting it would be noise.
         self.assertNotIn("do_copy_in_default_stream", options)
 

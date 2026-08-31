@@ -124,17 +124,23 @@ class CanaryOnnxBackend(BaseASRBackend):
     #   cudnn_conv_algo_search: EXHAUSTIVE benchmarks every convolution
     #       algorithm at load time, allocating each one's workspace to do it.
     #
-    # gpu_mem_limit is a backstop, not the lever, and it caps each ONNX session
-    # rather than the process - Canary opens one for the encoder and one for the
-    # decoder. 6 GiB covers the encoder's 3.1 GiB of weights plus the activations
-    # of a single MAX_SEGMENT_SECONDS window with room to spare; raise it if a
-    # legitimate transcription ever hits the OOM path in Transcriber.transcribe().
+    # gpu_mem_limit caps each ONNX session, not the process: Canary opens one
+    # session for the encoder and one for the decoder, so the process ceiling is
+    # twice this value. 4 GiB is the floor that still fits the encoder's 3.06 GiB
+    # of weights with working room - measured over 16 back-to-back inferences at
+    # lengths up to the 20 s MAX_SEGMENT_SECONDS maximum, zero allocation
+    # failures, VRAM settling at 4.65 GB. Going lower risks failing at session
+    # creation, when the encoder's initializers are copied to the device.
+    #
+    # A BFC arena that reaches its cap does not fail: it reuses freed blocks.
+    # It only fails when a single instantaneous request exceeds the cap, which
+    # surfaces as the OOM path in Transcriber.transcribe().
     #
     # do_copy_in_default_stream already defaults to "1" and is left out on
     # purpose: setting it changes nothing.
     CUDA_PROVIDER_OPTIONS = {
         "arena_extend_strategy": "kSameAsRequested",
-        "gpu_mem_limit": 6 * 1024 ** 3,
+        "gpu_mem_limit": 4 * 1024 ** 3,
         "cudnn_conv_algo_search": "HEURISTIC",
         "cudnn_conv_use_max_workspace": "0",
     }
