@@ -86,6 +86,14 @@ class FrenchProseIsLeftAloneTests(unittest.TestCase):
         "ni toi ni moi ne le savions.",
         "il ouvre la porte, ouvre-le en grand.",
         "la roche sur laquelle il grimpe.",
+        # Dictees reellement par l'utilisateur le 2026-08-31, apres le tri :
+        # elles etaient toutes abimees avant, elles doivent rester intactes.
+        "on y va, d'accord?",
+        "qui peut me passer les des ?",
+        # "mi-journee" est du francais ; "mid-journee", avec un D, est ce que
+        # Canary produit pour midjourney. Les deux doivent rester distincts.
+        "on se retrouve a mi-journee pour dejeuner.",
+        "une reunion a mi-journee, ca arrange tout le monde.",
     ]
 
     def test_project_dictionary_leaves_ordinary_french_untouched(self):

@@ -125,7 +125,10 @@
     "jdr": "JDR",
     "gidère": "JDR",
     "gipowa": "Geek Powa",
-    "méccaronne": "mecarun"
+    "méccaronne": "mecarun",
+    "mid-journée": "midjourney",
+    "guitpowa": "Geek Powa",
+    "macaronne": "mecarun"
   },
   "_comment": "Add your custom word corrections here. Keys are what the ASR outputs, values are the correct spelling."
 }
