@@ -35,6 +35,12 @@ class ModelConfig:
     device: str = "cuda:0"
     dtype: str = "bfloat16"  # Optimal for RTX 4090
     max_new_tokens: int = 512
+    # Release the model after this long without a transcription, handing its
+    # VRAM back to the system. The ONNX arena only grows while the model is
+    # loaded, so unloading between sessions is the only thing that truly
+    # reclaims it. The next hotkey press reloads (~15 s, overlapped with the
+    # recording itself). 0 disables the idle unload.
+    idle_unload_seconds: int = 900  # 15 minutes
     dry_run: bool = field(default_factory=lambda: os.getenv("FLOTOTEXT_DRY_RUN", "").lower() in {"1", "true", "yes", "on"})
     dry_run_text: str = "test dry-run deux-cent euros"
 
@@ -120,6 +126,8 @@ class Config:
             model = data.get("model", {})
             if "backend" in model:
                 self.model.backend = model["backend"]
+            if "idle_unload_seconds" in model:
+                self.model.idle_unload_seconds = int(model["idle_unload_seconds"])
         except (json.JSONDecodeError, IOError) as e:
             print(f"Warning: Could not load settings: {e}")
 
@@ -137,6 +145,7 @@ class Config:
             },
             "model": {
                 "backend": self.model.backend,
+                "idle_unload_seconds": self.model.idle_unload_seconds,
             }
         }
         try:

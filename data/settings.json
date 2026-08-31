@@ -9,6 +9,7 @@
     "input_device": "Shure MV7"
   },
   "model": {
-    "backend": "canary"
+    "backend": "canary",
+    "idle_unload_seconds": 900
   }
 }

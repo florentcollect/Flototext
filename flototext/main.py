@@ -122,6 +122,23 @@ class FlototextApp:
 
         threading.Thread(target=reset_state, daemon=True).start()
 
+    def _idle_unload_watchdog(self) -> None:
+        """Release the ASR model once it has sat unused long enough.
+
+        The ONNX arena grows with every unfamiliar decoder output length and
+        never shrinks, so a long-running session slowly accumulates VRAM.
+        Dropping the model between working sessions is what gives it back.
+        """
+        interval = 30.0
+        while self._running and not self._shutdown_event.wait(interval):
+            if self._processing or self._audio_recorder.is_recording:
+                continue
+            try:
+                if self._transcriber.unload_if_idle(config.model.idle_unload_seconds):
+                    self._tray_app.set_state(AppState.IDLE)
+            except Exception as e:
+                print(f"Idle unload check failed: {e}")
+
     def _on_recording_start(self) -> None:
         """Handle recording start event."""
         print("Recording started")
@@ -133,9 +150,17 @@ class FlototextApp:
     def _on_hotkey_press(self) -> None:
         """Handle hotkey press (start recording)."""
         if not self._transcriber.is_ready:
-            print("Model not ready yet")
-            self._sound_manager.play_error()
-            return
+            # After an idle unload the model is gone but reloadable, so record
+            # anyway and start the reload now: it runs while the user speaks,
+            # which is most of the wait. Only a model that never loaded, or
+            # failed to, still refuses.
+            if self._transcriber.was_unloaded_when_idle or self._transcriber.is_loading:
+                print("Model unloaded or still loading; reloading while recording")
+                self._transcriber.load_model_async()
+            else:
+                print("Model not ready yet")
+                self._sound_manager.play_error()
+                return
 
         if self._processing:
             print("Already processing a transcription")
@@ -205,6 +230,15 @@ class FlototextApp:
             self._notification_manager.notify_no_audio()
             self._sound_manager.play_error()
             return
+
+        # The idle watchdog may have released the model while we were away; the
+        # reload was kicked off on key press, this waits for it to finish.
+        if not self._transcriber.is_ready:
+            self._tray_app.set_state(AppState.LOADING)
+            if not self._transcriber.ensure_loaded():
+                self._on_transcription_error(localization.get("errors.model_not_loaded"))
+                return
+            self._tray_app.set_state(AppState.PROCESSING)
 
         # Transcribe
         result = self._transcriber.transcribe(audio_data, config.audio.sample_rate)
@@ -369,6 +403,11 @@ class FlototextApp:
         print("Loading ASR model in background...")
         self._notification_manager.notify_model_loading()
         self._transcriber.load_model_async()
+
+        # Hand the GPU back between working sessions
+        if config.model.idle_unload_seconds > 0:
+            print(f"Idle unload enabled: {config.model.idle_unload_seconds // 60} min")
+            threading.Thread(target=self._idle_unload_watchdog, daemon=True).start()
 
         # Wait for shutdown
         try:
