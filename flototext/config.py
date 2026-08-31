@@ -41,6 +41,17 @@ class ModelConfig:
     # reclaims it. The next hotkey press reloads (~15 s, overlapped with the
     # recording itself). 0 disables the idle unload.
     idle_unload_seconds: int = 900  # 15 minutes
+    # VRAM budget in GB for this process. The ONNX arena grows with use and a
+    # per-session gpu_mem_limit cannot cap the process (Canary opens two
+    # sessions, and the encoder's 3.06 GB of weights set the floor). So instead
+    # of capping, we watch: once the process is over budget, the model is
+    # released at the first lull rather than waiting for the full idle delay.
+    # A shared env allocator would give a hard cap, but it keeps its memory when
+    # sessions are dropped - measured - which would defeat the idle unload.
+    # 0 disables the budget check.
+    vram_budget_gb: float = 5.0
+    # How long without a transcription counts as a lull, when over budget.
+    over_budget_idle_seconds: int = 120
     dry_run: bool = field(default_factory=lambda: os.getenv("FLOTOTEXT_DRY_RUN", "").lower() in {"1", "true", "yes", "on"})
     dry_run_text: str = "test dry-run deux-cent euros"
 
@@ -128,6 +139,10 @@ class Config:
                 self.model.backend = model["backend"]
             if "idle_unload_seconds" in model:
                 self.model.idle_unload_seconds = int(model["idle_unload_seconds"])
+            if "vram_budget_gb" in model:
+                self.model.vram_budget_gb = float(model["vram_budget_gb"])
+            if "over_budget_idle_seconds" in model:
+                self.model.over_budget_idle_seconds = int(model["over_budget_idle_seconds"])
         except (json.JSONDecodeError, IOError) as e:
             print(f"Warning: Could not load settings: {e}")
 
@@ -146,6 +161,8 @@ class Config:
             "model": {
                 "backend": self.model.backend,
                 "idle_unload_seconds": self.model.idle_unload_seconds,
+                "vram_budget_gb": self.model.vram_budget_gb,
+                "over_budget_idle_seconds": self.model.over_budget_idle_seconds,
             }
         }
         try:

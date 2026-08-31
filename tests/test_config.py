@@ -45,3 +45,42 @@ class ConfigBackendPersistenceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VramBudgetSettingsTests(unittest.TestCase):
+    """The budget and the idle delay must survive a save/load round trip:
+    save_settings rewrites the whole file, so a key it forgets is a key lost at
+    the next backend switch from the tray."""
+
+    def _fresh_config(self, tmp: str) -> Config:
+        cfg = Config(base_dir=Path(tmp))
+        cfg.ensure_directories()
+        return cfg
+
+    def test_round_trip_keeps_memory_settings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = self._fresh_config(tmp)
+            cfg.model.idle_unload_seconds = 600
+            cfg.model.vram_budget_gb = 5.0
+            cfg.model.over_budget_idle_seconds = 90
+            cfg.save_settings()
+
+            reloaded = self._fresh_config(tmp)
+            reloaded.load_settings()
+
+            self.assertEqual(reloaded.model.idle_unload_seconds, 600)
+            self.assertEqual(reloaded.model.vram_budget_gb, 5.0)
+            self.assertEqual(reloaded.model.over_budget_idle_seconds, 90)
+
+    def test_legacy_settings_without_the_keys_keep_defaults(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = self._fresh_config(tmp)
+            cfg.settings_path.write_text(
+                json.dumps({"model": {"backend": "canary"}}), encoding="utf-8")
+
+            reloaded = self._fresh_config(tmp)
+            reloaded.load_settings()
+
+            self.assertEqual(reloaded.model.backend, "canary")
+            self.assertEqual(reloaded.model.idle_unload_seconds, 900)
+            self.assertEqual(reloaded.model.vram_budget_gb, 5.0)

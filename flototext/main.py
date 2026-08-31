@@ -5,7 +5,9 @@ import sys
 import time
 import threading
 import signal
+import subprocess
 from datetime import datetime
+from typing import Optional
 
 from .config import config
 from .core.hotkey_manager import HotkeyManager
@@ -122,19 +124,67 @@ class FlototextApp:
 
         threading.Thread(target=reset_state, daemon=True).start()
 
+    def _process_vram_mb(self) -> Optional[int]:
+        """Dedicated VRAM held by this process, in MB, or None if unavailable.
+
+        Read from the Windows performance counter: under WDDM, nvidia-smi
+        reports no per-process figure. Costs a PowerShell launch, so the caller
+        keeps it to a slow cadence.
+        """
+        if sys.platform != "win32":
+            return None
+        requete = (
+            "(Get-Counter '\\GPU Process Memory(*)\\Dedicated Usage').CounterSamples | "
+            f"Where-Object {{ $_.InstanceName -like '*_{os.getpid()}_*' }} | "
+            "Measure-Object -Property CookedValue -Sum | "
+            "ForEach-Object { [int]($_.Sum / 1MB) }"
+        )
+        try:
+            sortie = subprocess.run(
+                ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", requete],
+                capture_output=True, text=True, timeout=30,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+        valeur = sortie.stdout.strip()
+        return int(valeur) if valeur.isdigit() else None
+
     def _idle_unload_watchdog(self) -> None:
         """Release the ASR model once it has sat unused long enough.
 
         The ONNX arena grows with every unfamiliar decoder output length and
         never shrinks, so a long-running session slowly accumulates VRAM.
         Dropping the model between working sessions is what gives it back.
+
+        A second, shorter trigger applies once the process is over its VRAM
+        budget: a per-session gpu_mem_limit cannot cap the process, so rather
+        than capping we release earlier, at the first lull.
         """
         interval = 30.0
+        prochaine_mesure = 0.0
+        intervalle_mesure = 300.0
+
         while self._running and not self._shutdown_event.wait(interval):
             if self._processing or self._audio_recorder.is_recording:
                 continue
             try:
-                if self._transcriber.unload_if_idle(config.model.idle_unload_seconds):
+                delai = config.model.idle_unload_seconds
+
+                budget = config.model.vram_budget_gb
+                maintenant = time.monotonic()
+                if (budget > 0 and self._transcriber.is_ready
+                        and maintenant >= prochaine_mesure):
+                    prochaine_mesure = maintenant + intervalle_mesure
+                    utilisee = self._process_vram_mb()
+                    if utilisee is not None and utilisee > budget * 1024:
+                        court = config.model.over_budget_idle_seconds
+                        if 0 < court < delai:
+                            print(f"VRAM {utilisee} MB over the {budget} GB budget; "
+                                  f"releasing the model after {court}s idle")
+                            delai = court
+
+                if self._transcriber.unload_if_idle(delai):
                     self._tray_app.set_state(AppState.IDLE)
             except Exception as e:
                 print(f"Idle unload check failed: {e}")
