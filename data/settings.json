@@ -10,7 +10,7 @@
   },
   "model": {
     "backend": "canary",
-    "idle_unload_seconds": 900,
+    "idle_unload_seconds": 2700,
     "vram_budget_gb": 6.0,
     "over_budget_idle_seconds": 120
   }

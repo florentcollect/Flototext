@@ -201,12 +201,14 @@ class FlototextApp:
         """Handle hotkey press (start recording)."""
         if not self._transcriber.is_ready:
             # After an idle unload the model is gone but reloadable, so record
-            # anyway and start the reload now: it runs while the user speaks,
-            # which is most of the wait. Only a model that never loaded, or
-            # failed to, still refuses.
+            # anyway; ensure_loaded() on the transcription path reloads it once
+            # the key is released. Do NOT start the reload here: creating the
+            # ONNX sessions holds the GIL for ~2 s, which freezes the audio
+            # callback and drops the first words (measured 2026-09-13: 2.8 s
+            # of 4.4 s lost, whatever the stream latency/blocksize). Only a
+            # model that never loaded, or failed to, still refuses.
             if self._transcriber.was_unloaded_when_idle or self._transcriber.is_loading:
-                print("Model unloaded or still loading; reloading while recording")
-                self._transcriber.load_model_async()
+                print("Model unloaded; recording now, reloading on release")
             else:
                 print("Model not ready yet")
                 self._sound_manager.play_error()
