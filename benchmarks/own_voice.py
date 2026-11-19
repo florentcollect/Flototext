@@ -113,10 +113,10 @@ def load_phrases() -> List[str]:
     return [line.strip() for line in lines if line.strip()]
 
 
-def load_manifest() -> list:
-    if not MANIFEST_FILE.exists():
+def load_manifest(path: Path = MANIFEST_FILE) -> list:
+    if not path.exists():
         return []
-    return json.loads(MANIFEST_FILE.read_text(encoding="utf-8"))
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def save_manifest(entries: list) -> None:
@@ -215,7 +215,8 @@ def cmd_bench(args) -> int:
     from benchmarks.benchmark_asr import corpus_wer, run_backend, wer_for
     from flototext.core.text_corrector import TextCorrector
 
-    clips = load_clips(load_manifest(), OWN_VOICE_DIR)
+    directory = args.dir or OWN_VOICE_DIR
+    clips = load_clips(load_manifest(directory / "manifest.json"), directory)
     if not clips:
         print("Aucune prise : lance d'abord `record`.")
         return 1
@@ -248,7 +249,7 @@ def cmd_bench(args) -> int:
 
     total_audio = sum(c.duration for c in clips)
     lines = [
-        "# Benchmark ASR — ta voix (MV7)",
+        f"# Benchmark ASR — ta voix ({directory.name})",
         "",
         f"- Prises : **{len(clips)}**, audio total **{total_audio:.1f} s**",
         f"- Run : `{stamp}`",
@@ -291,6 +292,8 @@ def main(argv=None) -> int:
     p = sub.add_parser("bench", help="comparer les moteurs sur les prises")
     p.add_argument("--backends", nargs="+", default=["canary", "parakeet"],
                    choices=["qwen", "canary", "parakeet"])
+    p.add_argument("--dir", type=Path, default=None,
+                   help="dossier de prises (défaut : own_voice ; ex. sortie de from_subtitles)")
     p.set_defaults(func=cmd_bench)
 
     args = parser.parse_args(argv)
