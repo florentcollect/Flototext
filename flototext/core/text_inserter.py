@@ -52,8 +52,12 @@ class TextInserter:
             # Small delay to ensure paste completes
             time.sleep(0.1)
 
-            # Restore previous clipboard content
-            if restore_clipboard and self._previous_clipboard is not None:
+            # Restore previous clipboard content - only when it was text.
+            # pyperclip reads an image or a file list as "", and "restoring"
+            # that emptied the clipboard: the screenshot was gone and so was
+            # the dictation. Leaving the dictated text there is the better
+            # loss; keeping a non-text clipboard would need every format saved.
+            if restore_clipboard and self._previous_clipboard:
                 time.sleep(0.1)
                 try:
                     pyperclip.copy(self._previous_clipboard)
