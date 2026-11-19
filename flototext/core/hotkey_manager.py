@@ -1,6 +1,7 @@
 """Hotkey management using pynput."""
 
 import ctypes
+import queue
 import sys
 import threading
 from typing import Callable, Optional
@@ -64,6 +65,15 @@ class HotkeyManager:
         self._watchdog: Optional[threading.Thread] = None
         self._listener_lock = threading.Lock()
 
+        # Press and release callbacks run one after the other on a single
+        # worker, never side by side. With one thread per event, a tap shorter
+        # than opening the audio stream let the release handler run first, see
+        # "not recording" and return; the press handler then started a capture
+        # nobody would stop, with the system audio left muted.
+        self._events: "queue.Queue[Callable]" = queue.Queue()
+        self._worker: Optional[threading.Thread] = None
+        self._worker_lock = threading.Lock()
+
     def _parse_key(self, key_string: str) -> keyboard.Key:
         """Parse a key string to a pynput key.
 
@@ -114,9 +124,29 @@ class HotkeyManager:
         return _SPECIAL_VK.get(key_string)
 
     def _dispatch(self, callback: Optional[Callable]) -> None:
-        """Run a callback off the listener thread so it never blocks input."""
-        if callback:
-            threading.Thread(target=callback, daemon=True).start()
+        """Queue a callback for the worker, off the listener thread.
+
+        The listener must never block input, and the callbacks must run in the
+        order the key events happened: one FIFO worker gives both.
+        """
+        if not callback:
+            return
+        with self._worker_lock:
+            if self._worker is None or not self._worker.is_alive():
+                self._worker = threading.Thread(target=self._run_events, daemon=True)
+                self._worker.start()
+        self._events.put(callback)
+
+    def _run_events(self) -> None:
+        """Run queued key callbacks one at a time, in arrival order."""
+        while True:
+            callback = self._events.get()
+            try:
+                callback()
+            except Exception as e:
+                print(f"Error in hotkey callback: {e}")
+            finally:
+                self._events.task_done()
 
     def _on_press(self, key) -> None:
         """Handle key press events."""

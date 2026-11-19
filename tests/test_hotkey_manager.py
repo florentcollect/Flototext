@@ -1,6 +1,7 @@
 import threading
 import time
 import unittest
+import unittest.mock
 
 from flototext.core.hotkey_manager import HotkeyManager
 
@@ -38,6 +39,7 @@ class WatchdogTest(unittest.TestCase):
         time.sleep(seconds)
         manager._watchdog_stop.set()
         thread.join(timeout=1)
+        manager._events.join()  # callbacks run on the event worker
 
     def test_dropped_release_is_recovered(self):
         manager = self._manager(lambda: False)
@@ -82,6 +84,7 @@ class WatchdogTest(unittest.TestCase):
         self.assertTrue(manager._release())
         self.assertFalse(manager._release(), "a late real release after recovery is a no-op")
 
+        manager._events.join()  # callbacks run on the event worker
         self.assertEqual(self.presses, [1])
         self.assertEqual(self.releases, [1])
 
@@ -94,3 +97,39 @@ class WatchdogTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EventOrderTest(unittest.TestCase):
+    """A tap shorter than opening the audio stream must not strand a capture."""
+
+    def test_release_waits_for_a_slow_press_handler(self):
+        order = []
+
+        def slow_press():
+            time.sleep(0.2)  # opening the audio stream
+            order.append("press done")
+
+        manager = HotkeyManager(on_key_press=slow_press,
+                                on_key_release=lambda: order.append("release"))
+        manager._on_press(manager._trigger_key)
+        manager._on_release(manager._trigger_key)
+
+        deadline = time.monotonic() + 2
+        while len(order) < 2 and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertEqual(order, ["press done", "release"])
+
+    def test_a_failing_callback_does_not_stop_later_events(self):
+        seen = []
+
+        def boom():
+            raise RuntimeError("boom")
+
+        manager = HotkeyManager(on_key_press=boom, on_key_release=lambda: seen.append(1))
+        with unittest.mock.patch("builtins.print"):
+            manager._on_press(manager._trigger_key)
+            manager._on_release(manager._trigger_key)
+            deadline = time.monotonic() + 2
+            while not seen and time.monotonic() < deadline:
+                time.sleep(0.01)
+        self.assertEqual(seen, [1])
