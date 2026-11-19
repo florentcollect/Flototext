@@ -1,9 +1,9 @@
 @echo off
 cd /d "%~dp0"
 
-:: Kill existing Flototext (pythonw) instances. On ne tue PAS python.exe pour
-:: ne pas couper d'autres scripts en cours.
-taskkill /f /im pythonw.exe 2>nul
+:: Kill existing Flototext instances only (pythonw or a previous debug
+:: console), matched on the command line so other Python scripts survive.
+powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { ($_.Name -eq 'pythonw.exe' -or $_.Name -eq 'python.exe') -and $_.CommandLine -like '*flototext.main*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }" >nul 2>&1
 
 :: Small delay to ensure process is fully terminated
 timeout /t 1 /nobreak >nul
