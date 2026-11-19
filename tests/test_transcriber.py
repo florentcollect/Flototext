@@ -85,10 +85,6 @@ class TranscriberTests(unittest.TestCase):
         self.assertEqual(transcriber.backend_name, "dummy")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class SlowBackend:
     """Records when transcriptions overlap, so we can prove they never do."""
 
@@ -214,3 +210,100 @@ class IdleUnloadTests(unittest.TestCase):
         with patch("flototext.core.transcriber.create_backend",
                    side_effect=RuntimeError("pas de GPU")), patch("builtins.print"):
             self.assertFalse(t.ensure_loaded(timeout=5))
+
+
+class ArenaFailureBackend:
+    """Fails like an exhausted ONNX arena until the model is reloaded."""
+
+    name = "arena"
+    instances = []
+
+    def __init__(self):
+        self.calls = 0
+        ArenaFailureBackend.instances.append(self)
+
+    def load(self):
+        pass
+
+    def transcribe(self, *_args, **_kwargs):
+        self.calls += 1
+        if len(ArenaFailureBackend.instances) == 1:
+            raise RuntimeError("BFCArena::AllocateRawInternal Failed to allocate memory "
+                               "for requested buffer of size 8388608")
+        return "texte sauvé", "fr"
+
+    def cleanup(self):
+        pass
+
+
+class LoadStateTests(unittest.TestCase):
+    def test_allocation_failure_is_retried_once_on_a_fresh_model(self):
+        ArenaFailureBackend.instances = []
+        t = Transcriber(dry_run=False)
+        with patch("flototext.core.transcriber.create_backend",
+                   side_effect=lambda _name: ArenaFailureBackend()), patch("builtins.print"):
+            t._load_model()
+            result = t.transcribe(np.ones(16000, dtype=np.float32))
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.text, "texte sauvé")
+        self.assertEqual(len(ArenaFailureBackend.instances), 2)
+
+    def test_ordinary_errors_are_not_retried(self):
+        t = _pret(Transcriber(dry_run=False), FailingBackend())
+        with patch("builtins.print"),                 patch("flototext.core.transcriber.create_backend") as create:
+            result = t.transcribe(np.ones(16000, dtype=np.float32))
+        self.assertFalse(result.success)
+        create.assert_not_called()
+
+    def test_a_fast_failing_load_is_seen_at_once(self):
+        # A load that fails before the waiter's first poll used to be missed,
+        # leaving ensure_loaded() spinning for its whole timeout.
+        t = Transcriber(dry_run=False)
+        with patch("flototext.core.transcriber.create_backend",
+                   side_effect=RuntimeError("CUBLAS failure 3")), patch("builtins.print"):
+            debut = time.monotonic()
+            self.assertFalse(t.ensure_loaded(timeout=5))
+        self.assertLess(time.monotonic() - debut, 1.0)
+
+    def test_a_superseded_load_cleans_up_instead_of_installing(self):
+        gate = threading.Event()
+        built = []
+
+        class GatedBackend(SlowBackend):
+            def __init__(self, name):
+                super().__init__()
+                self.name = name
+                built.append(self)
+
+            def load(self):
+                if self.name == "ancien":
+                    gate.wait(2)
+
+        names = iter(["ancien", "nouveau"])
+        t = Transcriber(dry_run=False)
+        with patch("flototext.core.transcriber.create_backend",
+                   side_effect=lambda _n: GatedBackend(next(names))), patch("builtins.print"):
+            t.load_model_async()          # "ancien" blocks in load()
+            time.sleep(0.05)
+            t.reload_backend()            # user picks another engine
+            self.assertTrue(t.ensure_loaded(timeout=2))
+            gate.set()                    # the old load finishes late
+            time.sleep(0.2)
+
+        self.assertEqual(t.backend_name, "nouveau")
+        self.assertTrue(built[0].cleaned, "the superseded model must release its VRAM")
+
+    def test_two_concurrent_async_loads_start_one_thread(self):
+        started = []
+        t = Transcriber(dry_run=False)
+        with patch.object(threading, "Thread",
+                          side_effect=lambda **kw: types.SimpleNamespace(
+                              start=lambda: started.append(1))):
+            t.load_model_async()
+            t.load_model_async()
+        self.assertEqual(started, [1])
+
+
+if __name__ == "__main__":
+    unittest.main()

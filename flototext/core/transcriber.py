@@ -18,6 +18,24 @@ from .localization import localization
 from .asr_backends import create_backend, BaseASRBackend
 
 
+# Messages that mean the engine ran out of device memory rather than failed on
+# the audio. Seen in the log: "BFCArena ... Failed to allocate memory" from the
+# ONNX arena, "CUBLAS failure 3" when another program had filled the GPU.
+_ALLOCATION_FAILURE_MARKERS = (
+    "bfcarena",
+    "failed to allocate memory",
+    "cublas failure",
+    "cuda failure",
+    "out of memory",
+)
+
+
+def _is_allocation_failure(error: Optional[str]) -> bool:
+    """Whether an engine error is a device-memory failure worth one reload."""
+    text = (error or "").lower()
+    return any(marker in text for marker in _ALLOCATION_FAILURE_MARKERS)
+
+
 @dataclass
 class TranscriptionResult:
     """Result of a transcription."""
@@ -60,6 +78,10 @@ class Transcriber:
         # True once the idle watchdog has released the model, so that pressing
         # the hotkey knows this is a reloadable state and not a failed load.
         self._unloaded_when_idle = False
+        # Bumped by reload_backend(). A load that finishes under an older
+        # generation was superseded (the user picked another engine meanwhile):
+        # it releases what it built instead of installing it over the new one.
+        self._generation = 0
 
     @property
     def is_ready(self) -> bool:
@@ -82,11 +104,19 @@ class Transcriber:
         return self._backend.name if self._backend else None
 
     def load_model_async(self) -> None:
-        """Load the model in a background thread."""
-        if self._loading or self._model_loaded:
-            return
+        """Load the model in a background thread.
 
-        thread = threading.Thread(target=self._load_model, daemon=True)
+        ``_loading`` is raised here, before the thread starts, and under the
+        lock: two callers cannot both start a load, and a waiter never sees
+        "not loading" in the gap before the worker runs.
+        """
+        with self._lock:
+            if self._loading or self._model_loaded:
+                return
+            self._loading = True
+            generation = self._generation
+
+        thread = threading.Thread(target=self._load_model, args=(generation,), daemon=True)
         thread.start()
 
     def unload_if_idle(self, idle_seconds: float) -> bool:
@@ -137,34 +167,36 @@ class Transcriber:
 
         self.load_model_async()
         limite = time.monotonic() + timeout
-        # _loading is only raised once the worker thread starts, so we cannot
-        # read "not loading" as failure until we have seen it go up at least
-        # once - otherwise we would give up in the gap right after the call.
-        demarre = False
         while time.monotonic() < limite:
             if self._model_loaded:
                 return True
-            if self._loading:
-                demarre = True
-            elif demarre:
+            if not self._loading:
                 # Loading ended without success; _load_model already reported.
                 return False
-            time.sleep(0.1)
+            time.sleep(0.05)
         return self._model_loaded
 
-    def _load_model(self) -> None:
-        """Load the ASR backend selected in the configuration."""
+    def _load_model(self, generation: Optional[int] = None) -> None:
+        """Load the ASR backend selected in the configuration.
+
+        Args:
+            generation: The reload generation this load belongs to; None when
+                called directly, meaning "the current one".
+        """
         with self._lock:
             if self._model_loaded:
+                self._loading = False
                 return
-
+            if generation is None:
+                generation = self._generation
             self._loading = True
 
         if self._dry_run:
-            self._model_loaded = True
-            self._loading = False
-            self._last_used = time.monotonic()
-            self._unloaded_when_idle = False
+            with self._lock:
+                self._model_loaded = True
+                self._loading = False
+                self._last_used = time.monotonic()
+                self._unloaded_when_idle = False
             print("Dry-run mode enabled; skipping ASR model load")
             if self.on_model_loaded:
                 self.on_model_loaded()
@@ -174,35 +206,56 @@ class Transcriber:
             backend = create_backend(config.model.backend)
             print(f"Loading ASR backend: {backend.name}")
             backend.load()
-
-            self._backend = backend
-            self._model_loaded = True
-            self._loading = False
-            self._last_used = time.monotonic()
-            self._unloaded_when_idle = False
-
-            print("Model loaded successfully")
-
-            if self.on_model_loaded:
-                self.on_model_loaded()
-
         except Exception as e:
-            self._loading = False
+            with self._lock:
+                stale = generation != self._generation
+                if not stale:
+                    self._loading = False
+            if stale:
+                return
             error_msg = f"Failed to load model: {e}"
             print(error_msg)
-
             if self.on_error:
                 self.on_error(error_msg)
+            return
+
+        with self._lock:
+            if generation != self._generation:
+                stale = True
+            else:
+                stale = False
+                with self._engine_lock:
+                    previous, self._backend = self._backend, backend
+                    self._model_loaded = True
+                self._loading = False
+                self._last_used = time.monotonic()
+                self._unloaded_when_idle = False
+
+        if stale:
+            # The user switched engine while this one was loading: keep the
+            # newer choice and hand this model's VRAM straight back.
+            print(f"Discarding superseded {backend.name} load")
+            backend.cleanup()
+            return
+        if previous is not None and previous is not backend:
+            previous.cleanup()
+
+        print("Model loaded successfully")
+        if self.on_model_loaded:
+            self.on_model_loaded()
 
     def reload_backend(self) -> None:
         """Switch ASR engine: unload the current backend and reload from config.
 
         Used when the user changes the backend at runtime. Loading happens in a
-        background thread; ``on_model_loaded`` fires again when ready.
+        background thread; ``on_model_loaded`` fires again when ready. A load
+        still running for the previous choice is superseded and cleans up after
+        itself.
         """
+        with self._lock:
+            self._generation += 1
+            self._loading = False
         self.cleanup()
-        self._model_loaded = False
-        self._loading = False
         self.load_model_async()
 
     def transcribe(
@@ -212,6 +265,11 @@ class Transcriber:
     ) -> TranscriptionResult:
         """Transcribe audio data to text.
 
+        An allocation failure inside the engine (ONNX arena exhausted, cuBLAS
+        unable to get memory because something else filled the GPU) is retried
+        once on a freshly loaded model: a reload starts from an empty arena,
+        and the dictation is otherwise lost.
+
         Args:
             audio_data: Audio data as numpy array.
             sample_rate: Sample rate of the audio.
@@ -219,6 +277,18 @@ class Transcriber:
         Returns:
             TranscriptionResult with the transcribed text.
         """
+        result = self._transcribe_once(audio_data, sample_rate)
+        if result.success or not _is_allocation_failure(result.error):
+            return result
+
+        print(f"Engine allocation failure, reloading the model and retrying once: {result.error}")
+        self.cleanup()
+        if not self.ensure_loaded():
+            return result
+        return self._transcribe_once(audio_data, sample_rate)
+
+    def _transcribe_once(self, audio_data: np.ndarray, sample_rate: int) -> TranscriptionResult:
+        """One transcription attempt on the current engine."""
         if not self._model_loaded:
             return TranscriptionResult(
                 text="",
