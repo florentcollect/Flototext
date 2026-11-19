@@ -120,6 +120,11 @@ class TextCorrector:
             True if added successfully.
         """
         try:
+            # Matching is case-insensitive, so "Guipowa" and "guipowa" are the
+            # same entry: replace it rather than keep two.
+            existing = self._find_key(wrong)
+            if existing is not None:
+                del self._corrections[existing]
             self._corrections[wrong.lower()] = correct
             self._save_dictionary()
             self._build_pattern()
@@ -138,8 +143,11 @@ class TextCorrector:
             True if removed successfully.
         """
         try:
-            if wrong.lower() in self._corrections:
-                del self._corrections[wrong.lower()]
+            # Keys written by hand can carry capitals ("Guipowa"); looking up
+            # wrong.lower() missed them and Delete silently did nothing.
+            key = self._find_key(wrong)
+            if key is not None:
+                del self._corrections[key]
                 self._save_dictionary()
                 self._build_pattern()
                 return True
@@ -147,6 +155,11 @@ class TextCorrector:
         except Exception as e:
             print(f"Error removing correction: {e}")
             return False
+
+    def _find_key(self, wrong: str) -> Optional[str]:
+        """The stored key matching ``wrong`` regardless of case, if any."""
+        wanted = wrong.lower()
+        return next((k for k in self._corrections if k.lower() == wanted), None)
 
     def _save_dictionary(self) -> None:
         """Save corrections to the JSON file."""

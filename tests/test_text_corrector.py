@@ -13,6 +13,18 @@ class TextCorrectorTests(unittest.TestCase):
         corrector._build_pattern()
         return corrector
 
+    def test_key_with_capitals_can_be_removed_and_replaced(self):
+        corrector = self._make_corrector({"Guipowa": "Geek Powa"})
+        corrector._save_dictionary = lambda: None  # never touch the real file
+
+        self.assertTrue(corrector.add_correction("guipowa", "Geek POWA"))
+        self.assertEqual(corrector.get_corrections(), {"guipowa": "Geek POWA"})
+
+        corrector = self._make_corrector({"Guipowa": "Geek Powa"})
+        corrector._save_dictionary = lambda: None
+        self.assertTrue(corrector.remove_correction("guipowa"))
+        self.assertEqual(corrector.get_corrections(), {})
+
     def test_corrects_phrase_ending_with_punctuation(self):
         corrector = self._make_corrector({"gitpo.": "Geek Powa"})
 
