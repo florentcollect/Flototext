@@ -134,6 +134,8 @@ class Config:
             audio = data.get("audio", {})
             if "input_device" in audio:
                 self.audio.input_device = audio["input_device"] or None
+            if "silence_rms_threshold" in audio:
+                self.audio.silence_rms_threshold = float(audio["silence_rms_threshold"])
             # Model section is optional; legacy settings without it keep the default.
             model = data.get("model", {})
             if "backend" in model:
@@ -158,6 +160,7 @@ class Config:
             },
             "audio": {
                 "input_device": self.audio.input_device,
+                "silence_rms_threshold": self.audio.silence_rms_threshold,
             },
             "model": {
                 "backend": self.model.backend,

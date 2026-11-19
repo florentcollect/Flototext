@@ -43,6 +43,32 @@ class ConfigBackendPersistenceTests(unittest.TestCase):
             self.assertEqual(cfg.model.backend, "qwen")
 
 
+
+class SilenceThresholdSettingTests(unittest.TestCase):
+    """The silence gate must be tunable without editing code: the MOTIV
+    denoiser moved the noise floor from 0.002 to 0.000015, and quiet but
+    real takes at 0.0013 were being rejected."""
+
+    def test_threshold_round_trips_through_settings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = Config(base_dir=Path(tmp))
+            cfg.ensure_directories()
+            cfg.audio.silence_rms_threshold = 0.0005
+            cfg.save_settings()
+
+            reloaded = Config(base_dir=Path(tmp))
+            reloaded.load_settings()
+            self.assertEqual(reloaded.audio.silence_rms_threshold, 0.0005)
+
+    def test_missing_key_keeps_the_default(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = Config(base_dir=Path(tmp))
+            cfg.ensure_directories()
+            cfg.settings_path.write_text(json.dumps({"audio": {"input_device": "Shure MV7"}}),
+                                         encoding="utf-8")
+            cfg.load_settings()
+            self.assertEqual(cfg.audio.silence_rms_threshold, Config().audio.silence_rms_threshold)
+
 if __name__ == "__main__":
     unittest.main()
 
