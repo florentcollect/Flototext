@@ -57,6 +57,7 @@
     "model_not_loaded": "Modèle non chargé",
     "gpu_oom": "Mémoire GPU insuffisante. Essayez un enregistrement plus court.",
     "transcription_error": "Erreur de transcription: {error}",
-    "cannot_open_dictionary": "Impossible d'ouvrir le dictionnaire: {error}"
+    "cannot_open_dictionary": "Impossible d'ouvrir le dictionnaire: {error}",
+    "mic_unavailable": "Impossible d'ouvrir le micro. Vérifie qu'il est branché."
   }
 }

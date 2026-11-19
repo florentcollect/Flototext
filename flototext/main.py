@@ -249,6 +249,12 @@ class FlototextApp:
             self._sound_manager.play_start_recording()
             # Mute system audio to prevent interference
             self._audio_muter.mute()
+        else:
+            # Without this, a microphone that will not open looks exactly
+            # like a key press that was never seen.
+            print("Could not start recording")
+            self._sound_manager.play_error()
+            self._notification_manager.notify_error(localization.get("errors.mic_unavailable"))
 
     def _on_hotkey_release(self) -> None:
         """Handle hotkey release (stop recording and transcribe)."""

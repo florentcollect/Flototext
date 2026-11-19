@@ -193,8 +193,20 @@ class InputDeviceResolutionTests(unittest.TestCase):
 
     def _resolve(self, wanted):
         config.audio.input_device = wanted
-        with patch("flototext.core.audio_recorder.sd.query_devices", return_value=self.DEVICES):
+        with patch("flototext.core.audio_recorder.sd.query_devices", return_value=self.DEVICES),                 patch.object(AudioRecorder, "_refresh_device_list", return_value=True),                 patch("builtins.print"):
             return self.recorder._resolve_input_device()
+
+    def test_microphone_plugged_in_after_startup_is_found(self):
+        # PortAudio's list is frozen at init: the pinned mic only appears once
+        # the list is refreshed.
+        config.audio.input_device = "Shure MV7"
+        before = self.DEVICES[:3]
+        refreshed = []
+        with patch("flototext.core.audio_recorder.sd.query_devices",
+                   side_effect=lambda: self.DEVICES if refreshed else before),                 patch.object(AudioRecorder, "_refresh_device_list",
+                             side_effect=lambda: refreshed.append(1) or True):
+            self.assertEqual(self.recorder._resolve_input_device(), 3)
+        self.assertEqual(refreshed, [1])
 
     def test_unset_device_follows_system_default(self):
         self.assertIsNone(self._resolve(None))
@@ -207,6 +219,17 @@ class InputDeviceResolutionTests(unittest.TestCase):
 
     def test_unknown_device_falls_back_to_default_rather_than_failing(self):
         self.assertIsNone(self._resolve("Nonexistent Mic"))
+
+    def test_stream_that_fails_to_start_is_closed(self):
+        class FailingStream(FakeInputStream):
+            def start(self):
+                raise OSError("device busy")
+
+        FakeInputStream.instances = []
+        with patch("flototext.core.audio_recorder.sd.InputStream", FailingStream),                 patch.object(AudioRecorder, "_resolve_input_device", return_value=None),                 patch("builtins.print"):
+            self.assertFalse(self.recorder.start_recording())
+        self.assertTrue(FakeInputStream.instances[0].closed)
+        self.assertIsNone(self.recorder._stream)
 
     def test_query_failure_falls_back_to_default(self):
         config.audio.input_device = "Shure MV7"

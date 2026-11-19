@@ -57,6 +57,7 @@
     "model_not_loaded": "Model not loaded",
     "gpu_oom": "GPU out of memory. Please try a shorter recording.",
     "transcription_error": "Transcription error: {error}",
-    "cannot_open_dictionary": "Cannot open dictionary: {error}"
+    "cannot_open_dictionary": "Cannot open dictionary: {error}",
+    "mic_unavailable": "Could not open the microphone. Check that it is plugged in."
   }
 }

@@ -112,6 +112,15 @@ class HotkeyPressTests(unittest.TestCase):
         app._audio_recorder.start_recording.assert_called_once()
         self.assertEqual(app._transcriber.load_calls, 0)
 
+    def test_microphone_that_will_not_open_is_reported(self):
+        app = make_app(FakeTranscriber())
+        app._audio_recorder.start_recording.return_value = False
+        with patch("builtins.print"):
+            app._on_hotkey_press()
+        app._notification_manager.notify_error.assert_called_once()
+        app._sound_manager.play_error.assert_called_once()
+        app._audio_muter.mute.assert_not_called()
+
 
 class FailedDictationTests(unittest.TestCase):
     def test_failed_capture_is_kept_and_retry_pastes_it(self):

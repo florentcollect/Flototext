@@ -146,20 +146,41 @@ class AudioRecorder:
             return None
 
         needle = wanted.casefold()
-        try:
-            devices = sd.query_devices()
-        except Exception as e:
-            print(f"Could not query audio devices: {e}")
-            return None
+        # PortAudio lists devices once, when it initialises. A microphone that
+        # was unplugged or re-enumerated since (the MV7 comes back as "3- Shure
+        # MV7+") stays invisible until it re-initialises: on 2026-09-26 two
+        # captures went to a dead Oculus input until the app was restarted. So
+        # on a miss, refresh the list once and look again. Safe here: this runs
+        # before the stream is opened, and the recorder owns the only stream.
+        for attempt in (1, 2):
+            try:
+                devices = sd.query_devices()
+            except Exception as e:
+                print(f"Could not query audio devices: {e}")
+                return None
 
-        for index, device in enumerate(devices):
-            if device['max_input_channels'] > 0 and needle in device['name'].casefold():
-                self._resolved_device_name = device['name']
-                return index
+            for index, device in enumerate(devices):
+                if device['max_input_channels'] > 0 and needle in device['name'].casefold():
+                    self._resolved_device_name = device['name']
+                    return index
+
+            if attempt == 1 and not self._refresh_device_list():
+                break
 
         print(f"Input device {wanted!r} not found, using system default")
         self._resolved_device_name = None
         return None
+
+    @staticmethod
+    def _refresh_device_list() -> bool:
+        """Make PortAudio re-enumerate the audio devices. True on success."""
+        try:
+            sd._terminate()
+            sd._initialize()
+            return True
+        except Exception as e:
+            print(f"Could not refresh the audio device list: {e}")
+            return False
 
     def describe_input_device(self) -> str:
         """Name the input actually opened, for diagnosing a silent capture.
@@ -223,6 +244,14 @@ class AudioRecorder:
             except Exception as e:
                 print(f"Error starting recording: {e}")
                 self._recording = False
+                # An InputStream that opened but failed to start still holds
+                # the device; close it or the next attempt finds it busy.
+                if self._stream is not None:
+                    try:
+                        self._stream.close()
+                    except Exception:
+                        pass
+                    self._stream = None
                 return False
 
     def stop_recording(self) -> Optional[RecordingResult]:
