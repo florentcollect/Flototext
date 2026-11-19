@@ -69,6 +69,9 @@ class FlototextApp:
             on_change_language=self._on_change_language,
             on_change_asr_backend=self._on_change_asr_backend
         )
+        # Notices about failures (silent mic, load error, clipboard-only
+        # paste) are shown as balloons from the tray icon.
+        self._notification_manager.set_notifier(self._tray_app.notify)
 
         # Initialize hotkey manager with callbacks
         self._hotkey_manager = HotkeyManager(
