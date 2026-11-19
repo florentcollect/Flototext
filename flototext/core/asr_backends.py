@@ -12,6 +12,7 @@ that actually needs it.
 """
 
 import math
+import re
 
 import numpy as np
 from typing import Optional, Tuple
@@ -209,7 +210,7 @@ class CanaryOnnxBackend(BaseASRBackend):
 
         if len(audio) <= max_samples:
             text = self._recognize(audio, sample_rate, language_code)
-            return (text or "").strip(), language_code
+            return _clean(text), language_code
 
         # Long recording: split into equal windows and stitch the transcripts.
         # Equal, not fixed: a fixed 20 s stride left a tail of any length, down
@@ -225,11 +226,24 @@ class CanaryOnnxBackend(BaseASRBackend):
             part = self._recognize(chunk, sample_rate, language_code)
             if part:
                 parts.append(part.strip())
-        return " ".join(parts).strip(), language_code
+        return _clean(" ".join(parts)), language_code
 
     def cleanup(self) -> None:
         # onnxruntime sessions are released when the model is dereferenced.
         self._model = None
+
+
+_UNK_RE = re.compile(r"\s*<unk>\s*")
+
+
+def _clean(text) -> str:
+    """Drop the <unk> tokens the NeMo decoders emit for unknown pieces.
+
+    They were pasted as is ("Fletch<unk> Friends", "répéter<unk> il<unk>").
+    Removing one leaves a single space where it sat between two words.
+    """
+    text = _UNK_RE.sub(" ", text or "")
+    return re.sub(r"\s{2,}", " ", text).strip()
 
 
 class ParakeetOnnxBackend(CanaryOnnxBackend):

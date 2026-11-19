@@ -85,6 +85,18 @@ class ChunkBalanceTests(unittest.TestCase):
         self.assertLessEqual(max(backend._model.calls), 16000 * 20)
 
 
+class UnkTokenTests(unittest.TestCase):
+    def test_unk_tokens_are_not_pasted(self):
+        class UnkModel:
+            def recognize(self, audio, sample_rate, language):
+                return "Fletch<unk> Friends, répéter<unk> il<unk> vient"
+
+        backend = CanaryOnnxBackend()
+        backend._model = UnkModel()
+        text, _ = backend.transcribe(np.zeros(16000, dtype=np.float32), 16000, "French", "fr")
+        self.assertEqual(text, "Fletch Friends, répéter il vient")
+
+
 class FakeParakeetModel:
     """Parakeet v3 detects the language itself: recognize() takes none."""
 
