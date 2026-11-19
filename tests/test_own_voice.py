@@ -57,3 +57,44 @@ class LoadClipsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BenchReportTests(unittest.TestCase):
+    def test_engine_failures_are_counted_not_hidden_in_the_wer(self):
+        # An arena failure leaves an empty text that the WER books as deleted
+        # words: Canary read 12.5 % on the video takes for a real 6.3 %.
+        from benchmarks import benchmark_asr
+        from benchmarks.benchmark_asr import Clip, failure_note, run_backend
+
+        class FlakyBackend:
+            calls = 0
+
+            def load(self):
+                pass
+
+            def transcribe(self, audio, sr, label, code):
+                FlakyBackend.calls += 1
+                if FlakyBackend.calls == 2:
+                    raise RuntimeError("BFCArena::AllocateRawInternal")
+                return "bonjour", "fr"
+
+            def cleanup(self):
+                pass
+
+        clips = [Clip(clip_id=str(i), audio=np.zeros(16000, dtype=np.float32),
+                      duration=1.0, reference="bonjour") for i in range(3)]
+        with unittest.mock.patch.object(benchmark_asr, "create_backend", lambda name: FlakyBackend()), \
+                unittest.mock.patch.object(benchmark_asr, "gpu_used_gb", lambda: None), \
+                unittest.mock.patch("builtins.print"):
+            result = run_backend("canary", clips, "French", "fr")
+
+        self.assertEqual(result.failures, 1)
+        self.assertEqual(result.hyps, ["bonjour", "", "bonjour"])
+        self.assertIn("1 clip", failure_note(result))
+
+    def test_subtitle_references_get_their_own_caveat(self):
+        from benchmarks.own_voice import reference_caveat
+        subtitles = " ".join(reference_caveat([{"file": "a.wav", "source": "subtitles"}]))
+        dictations = " ".join(reference_caveat([{"file": "a.wav"}]))
+        self.assertIn("sous-titres", subtitles)
+        self.assertNotIn("sous-titres", dictations)

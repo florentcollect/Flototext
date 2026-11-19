@@ -126,6 +126,7 @@ def build_takes(audio: np.ndarray, segments: List[List[Cue]], out_dir: Path) -> 
             "reference": " ".join(c.text for c in group),
             "duration": round(len(chunk) / SAMPLE_RATE, 2),
             "start": round(start, 2),
+            "source": "subtitles",
         })
     (out_dir / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")

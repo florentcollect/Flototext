@@ -175,6 +175,17 @@ class BackendResult:
     latencies: List[float] = field(default_factory=list)
     peak_gpu_gb: float = 0.0
     error: Optional[str] = None
+    # Clips the engine raised on. Their text is empty, so the WER counts every
+    # word as deleted: two arena failures turned Canary's 6.3 % into 12.5 %.
+    failures: int = 0
+
+
+def failure_note(result: "BackendResult") -> Optional[str]:
+    """Report line for a backend that failed on some clips, else None."""
+    if not result.failures:
+        return None
+    return (f"> ⚠️ `{result.name}` a échoué sur {result.failures} clip(s) : texte vide, "
+            f"compté comme mots supprimés dans son WER.")
 
 
 def run_backend(name: str, clips: List[Clip], label: str, code: str) -> BackendResult:
@@ -200,6 +211,7 @@ def run_backend(name: str, clips: List[Clip], label: str, code: str) -> BackendR
             text, _lang = backend.transcribe(clip.audio, TARGET_SAMPLE_RATE, label, code)
         except Exception as e:
             text = ""
+            result.failures += 1
             print(f"  clip {i} failed: {e}")
         latency = time.perf_counter() - t
         result.hyps.append(text)
@@ -301,6 +313,10 @@ def write_reports(clips, results, lang, out_dir: Path, stamp: str) -> tuple[Path
             f"{s['lat_p90']:.2f}s | {s['rtf']:.3f} | {s['vram']:.2f} GB | {s['load']:.1f}s |"
         )
     lines.append("")
+    for r in ran:
+        note = failure_note(r)
+        if note:
+            lines += [note, ""]
 
     # Errors, if any
     for r in results:

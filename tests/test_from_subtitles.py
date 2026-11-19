@@ -51,3 +51,21 @@ class GroupCuesTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BuildTakesTests(unittest.TestCase):
+    def test_manifest_marks_its_references_as_subtitles(self):
+        import json
+        import tempfile
+        from pathlib import Path
+
+        import numpy as np
+
+        from benchmarks.from_subtitles import build_takes
+
+        audio = np.zeros(16000 * 3, dtype=np.float32)
+        with tempfile.TemporaryDirectory() as tmp:
+            build_takes(audio, [[Cue(0.5, 1.5, "bonjour")]], Path(tmp))
+            manifest = json.loads((Path(tmp) / "manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest[0]["source"], "subtitles")
+        self.assertEqual(manifest[0]["reference"], "bonjour")

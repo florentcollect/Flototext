@@ -191,6 +191,18 @@ def cmd_record(args) -> int:
 # --------------------------------------------------------------------------- #
 # bench: run the engines on the takes
 # --------------------------------------------------------------------------- #
+def reference_caveat(manifest: list) -> List[str]:
+    """What the references are, and so what the WER can and cannot say."""
+    if any(entry.get("source") == "subtitles" for entry in manifest):
+        # Published subtitles are tidied: they drop "en tout cas", "quand
+        # même", restarts. An engine that types what was said loses points.
+        return ["> Références = sous-titres publiés, épurés des hésitations et répétitions :",
+                "> un moteur fidèle à l'oral est pénalisé. Comparer les moteurs entre eux,",
+                "> pas le chiffre absolu."]
+    return ["> Les références viennent de dictées déjà passées par le dictionnaire,",
+            "> écrit d'après les erreurs de Canary : le WER dico avantage Canary."]
+
+
 def load_clips(manifest: list, directory: Path):
     """Turn recorded takes into benchmark clips, normalized the way the app does."""
     import soundfile as sf
@@ -212,11 +224,12 @@ def load_clips(manifest: list, directory: Path):
 def cmd_bench(args) -> int:
     import csv
     import statistics
-    from benchmarks.benchmark_asr import corpus_wer, run_backend, wer_for
+    from benchmarks.benchmark_asr import corpus_wer, failure_note, run_backend, wer_for
     from flototext.core.text_corrector import TextCorrector
 
     directory = args.dir or OWN_VOICE_DIR
-    clips = load_clips(load_manifest(directory / "manifest.json"), directory)
+    manifest = load_manifest(directory / "manifest.json")
+    clips = load_clips(manifest, directory)
     if not clips:
         print("Aucune prise : lance d'abord `record`.")
         return 1
@@ -263,11 +276,14 @@ def cmd_bench(args) -> int:
             f"| {r.name} | {corpus_wer(refs, r.hyps) * 100:.1f}% | "
             f"{corpus_wer(refs, corrected[r.name]) * 100:.1f}% | "
             f"{statistics.median(r.latencies):.2f}s | {r.load_seconds:.1f}s |")
+    for r in ran:
+        note = failure_note(r)
+        if note:
+            lines += ["", note]
     for r in results:
         if r.error:
             lines += ["", f"> Backend `{r.name}` a échoué au chargement : {r.error}"]
-    lines += ["", "> Les références viennent de dictées déjà passées par le dictionnaire,",
-              "> écrit d'après les erreurs de Canary : le WER dico avantage Canary."]
+    lines += [""] + reference_caveat(manifest)
     md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     print("\n" + "\n".join(lines))
