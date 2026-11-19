@@ -11,6 +11,8 @@ this module stays cheap and a missing optional dependency only fails the backend
 that actually needs it.
 """
 
+import math
+
 import numpy as np
 from typing import Optional, Tuple
 
@@ -209,10 +211,17 @@ class CanaryOnnxBackend(BaseASRBackend):
             text = self._recognize(audio, sample_rate, language_code)
             return (text or "").strip(), language_code
 
-        # Long recording: split into fixed windows and stitch the transcripts.
+        # Long recording: split into equal windows and stitch the transcripts.
+        # Equal, not fixed: a fixed 20 s stride left a tail of any length, down
+        # to a few samples, and under 320 samples (20 ms) onnx-asr's feature
+        # extractor divides by zero; the NaN features sent the decoder running
+        # until its arena failed (BFCArena on /_decoder/Concat_11, 4 times in
+        # the log). Equal windows are always over half the limit.
+        count = math.ceil(len(audio) / max_samples)
+        size = math.ceil(len(audio) / count)
         parts = []
-        for start in range(0, len(audio), max_samples):
-            chunk = audio[start:start + max_samples]
+        for start in range(0, len(audio), size):
+            chunk = audio[start:start + size]
             part = self._recognize(chunk, sample_rate, language_code)
             if part:
                 parts.append(part.strip())

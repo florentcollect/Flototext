@@ -17,6 +17,10 @@ from ..config import config
 SILENCE_WINDOW_SECONDS = 0.25
 
 
+# Shortest capture worth sending to an engine, measured in samples rather than
+# on the wall clock. Well above the 20 ms onnx-asr needs to compute features.
+MIN_CAPTURED_SECONDS = 0.3
+
 def peak_window_rms(
     audio_data: np.ndarray,
     sample_rate: int = None,
@@ -259,8 +263,16 @@ class AudioRecorder:
                 if len(audio_data.shape) > 1:
                     audio_data = audio_data.flatten()
 
-                # Check minimum duration
-                is_valid = duration >= config.audio.min_duration
+                # Check minimum duration, on the clock AND on what was actually
+                # captured: the stream can open late and deliver next to nothing
+                # for a key held 0.5 s. A few dozen samples reaching the engine
+                # make its feature extractor divide by zero (NaN features, a
+                # runaway decoder, an arena failure - 4 times in the log).
+                captured = len(audio_data) / self.sample_rate
+                is_valid = (duration >= config.audio.min_duration
+                            and captured >= MIN_CAPTURED_SECONDS)
+                if duration >= config.audio.min_duration and not is_valid:
+                    print(f"Only {captured:.3f}s of audio captured in {duration:.2f}s")
 
                 return RecordingResult(
                     audio_data=audio_data,

@@ -70,6 +70,21 @@ class CanaryChunkingTests(unittest.TestCase):
         self.assertEqual(text, "seg seg seg")
 
 
+class ChunkBalanceTests(unittest.TestCase):
+    def test_no_tiny_tail_reaches_the_engine(self):
+        # 20 s + 100 samples: a fixed 20 s stride sent a 100-sample tail, under
+        # the 320 samples onnx-asr's feature extractor needs.
+        backend = CanaryOnnxBackend()
+        backend._model = FakeCanaryModel()
+        audio = np.zeros(16000 * 20 + 100, dtype=np.float32)
+
+        backend.transcribe(audio, 16000, "French", "fr")
+
+        self.assertEqual(sum(backend._model.calls), len(audio))
+        self.assertGreaterEqual(min(backend._model.calls), 16000 * 10)
+        self.assertLessEqual(max(backend._model.calls), 16000 * 20)
+
+
 class FakeParakeetModel:
     """Parakeet v3 detects the language itself: recognize() takes none."""
 

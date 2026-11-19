@@ -42,6 +42,8 @@ class AudioRecorderTests(unittest.TestCase):
         stream = FakeInputStream.instances[0]
         stream.kwargs["callback"](np.array([[0.1], [0.2]], dtype=np.float32), 2, None, None)
         stream.kwargs["callback"](np.array([[0.3]], dtype=np.float32), 1, None, None)
+        tail = np.full((8000, 1), 0.4, dtype=np.float32)  # 0.5 s, so the take is valid
+        stream.kwargs["callback"](tail, len(tail), None, None)
 
         result = recorder.stop_recording()
 
@@ -52,7 +54,8 @@ class AudioRecorderTests(unittest.TestCase):
         self.assertTrue(stream.closed)
         self.assertTrue(result.is_valid)
         self.assertEqual(result.duration, 1.0)
-        np.testing.assert_array_equal(result.audio_data, np.array([0.1, 0.2, 0.3], dtype=np.float32))
+        np.testing.assert_array_equal(result.audio_data[:3], np.array([0.1, 0.2, 0.3], dtype=np.float32))
+        self.assertEqual(len(result.audio_data), 8003)
 
     @patch("flototext.core.audio_recorder.time.time", side_effect=[10.0, 11.0])
     @patch("flototext.core.audio_recorder.sd.InputStream", FakeInputStream)
@@ -83,6 +86,23 @@ class AudioRecorderTests(unittest.TestCase):
         stream.kwargs["callback"](np.array([[0.1]], dtype=np.float32), 1, None, None)
 
         result = recorder.stop_recording()
+
+        self.assertFalse(result.is_valid)
+
+
+    @patch("flototext.core.audio_recorder.time.time", side_effect=[10.0, 11.0])
+    @patch("flototext.core.audio_recorder.sd.InputStream", FakeInputStream)
+    def test_long_press_with_almost_no_audio_is_invalid(self, _time_mock):
+        # Key held a full second, but the stream delivered 100 samples: under
+        # the 320 the engine needs, which it answered with NaN features.
+        recorder = AudioRecorder()
+
+        self.assertTrue(recorder.start_recording())
+        stream = FakeInputStream.instances[0]
+        stream.kwargs["callback"](np.full((100, 1), 0.1, dtype=np.float32), 100, None, None)
+
+        with patch("builtins.print"):
+            result = recorder.stop_recording()
 
         self.assertFalse(result.is_valid)
 
