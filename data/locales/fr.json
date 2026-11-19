@@ -6,6 +6,7 @@
     "status": "Status: {state}",
     "transcriptions": "Transcriptions: {count}",
     "copy_last": "Copier dernière transcription",
+    "retry_last": "Réessayer la dernière dictée",
     "edit_dictionary": "Éditer dictionnaire",
     "sounds": "Sons",
     "notifications": "Notifications",
@@ -39,6 +40,7 @@
     "no_audio": "Aucun son capté. Vérifiez le microphone sélectionné dans Windows.",
     "copied_to_clipboard": "Copié dans le presse-papiers",
     "no_transcription": "Aucune transcription disponible",
+    "retry_available": "La dictée précédente a échoué : menu « Réessayer la dernière dictée ».",
     "error_title": "Erreur",
     "words_count": "{count} mots"
   },

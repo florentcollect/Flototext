@@ -6,6 +6,7 @@
     "status": "Status: {state}",
     "transcriptions": "Transcriptions: {count}",
     "copy_last": "Copy last transcription",
+    "retry_last": "Retry last dictation",
     "edit_dictionary": "Edit dictionary",
     "sounds": "Sounds",
     "notifications": "Notifications",
@@ -39,6 +40,7 @@
     "no_audio": "No sound captured. Check the microphone selected in Windows.",
     "copied_to_clipboard": "Copied to clipboard",
     "no_transcription": "No transcription available",
+    "retry_available": "The last dictation failed: use \"Retry last dictation\" in the menu.",
     "error_title": "Error",
     "words_count": "{count} words"
   },

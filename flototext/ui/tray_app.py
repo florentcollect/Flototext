@@ -57,7 +57,9 @@ class TrayApp:
         on_copy_last: Optional[Callable] = None,
         on_edit_dictionary: Optional[Callable] = None,
         on_change_language: Optional[Callable[[str], None]] = None,
-        on_change_asr_backend: Optional[Callable[[str], None]] = None
+        on_change_asr_backend: Optional[Callable[[str], None]] = None,
+        on_retry_last: Optional[Callable] = None,
+        can_retry_last: Optional[Callable[[], bool]] = None
     ):
         """Initialize the tray application.
 
@@ -70,6 +72,8 @@ class TrayApp:
             on_edit_dictionary: Callback to edit custom words dictionary.
             on_change_language: Callback when language is changed.
             on_change_asr_backend: Callback when the ASR backend is changed.
+            on_retry_last: Callback to retry the last failed dictation.
+            can_retry_last: Whether a failed dictation is waiting to be retried.
         """
         self.on_quit = on_quit
         self.on_toggle_sounds = on_toggle_sounds
@@ -79,6 +83,8 @@ class TrayApp:
         self.on_edit_dictionary = on_edit_dictionary
         self.on_change_language = on_change_language
         self.on_change_asr_backend = on_change_asr_backend
+        self.on_retry_last = on_retry_last
+        self.can_retry_last = can_retry_last
 
         self._icon: Optional[pystray.Icon] = None
         self._state = AppState.LOADING
@@ -231,6 +237,11 @@ class TrayApp:
                 self._copy_last
             ),
             MenuItem(
+                localization.get("menu.retry_last"),
+                self._retry_last,
+                enabled=lambda item: bool(self.can_retry_last and self.can_retry_last())
+            ),
+            MenuItem(
                 localization.get("menu.edit_dictionary"),
                 self._edit_dictionary
             ),
@@ -265,6 +276,11 @@ class TrayApp:
                 self._quit
             )
         )
+
+    def _retry_last(self) -> None:
+        """Retry the last dictation that failed to transcribe."""
+        if self.on_retry_last:
+            self.on_retry_last()
 
     def _copy_last(self) -> None:
         """Copy last transcription to clipboard."""

@@ -67,7 +67,9 @@ class FlototextApp:
             on_copy_last=self._on_copy_last,
             on_edit_dictionary=self._on_edit_dictionary,
             on_change_language=self._on_change_language,
-            on_change_asr_backend=self._on_change_asr_backend
+            on_change_asr_backend=self._on_change_asr_backend,
+            on_retry_last=self._on_retry_last,
+            can_retry_last=lambda: self._failed_capture is not None
         )
         # Notices about failures (silent mic, load error, clipboard-only
         # paste) are shown as balloons from the tray icon.
@@ -83,10 +85,18 @@ class FlototextApp:
         self._running = False
         self._processing = False
         self._shutdown_event = threading.Event()
+        # The last capture that could not be transcribed, kept so the user can
+        # retry it from the tray instead of dictating it again.
+        self._failed_capture = None
 
     def _on_model_loaded(self) -> None:
         """Handle model loaded event."""
         print("Model loaded successfully")
+        if self._processing:
+            # A reload on the transcription path: that dictation is still
+            # running and sets the state itself. Going green here would show
+            # "ready" over a transcription in progress.
+            return
         self._tray_app.set_state(AppState.IDLE)
         self._sound_manager.play_ready()
         self._notification_manager.notify_model_loaded()
@@ -119,10 +129,13 @@ class FlototextApp:
         self._sound_manager.play_error()
         self._notification_manager.notify_error(error)
 
-        # Return to idle state after a moment
+        # Return to idle after a moment - only if the model is still there. A
+        # transcription that failed because the model would not load leaves
+        # the icon grey: green would announce a readiness that is not there.
         def reset_state():
             time.sleep(2)
-            if self._running and not self._audio_recorder.is_recording:
+            if (self._running and not self._audio_recorder.is_recording
+                    and self._transcriber.is_ready):
                 self._tray_app.set_state(AppState.IDLE)
 
         threading.Thread(target=reset_state, daemon=True).start()
@@ -208,13 +221,23 @@ class FlototextApp:
             # the key is released. Do NOT start the reload here: creating the
             # ONNX sessions holds the GIL for ~2 s, which freezes the audio
             # callback and drops the first words (measured 2026-09-13: 2.8 s
-            # of 4.4 s lost, whatever the stream latency/blocksize). Only a
-            # model that never loaded, or failed to, still refuses.
-            if self._transcriber.was_unloaded_when_idle or self._transcriber.is_loading:
+            # of 4.4 s lost, whatever the stream latency/blocksize).
+            if self._transcriber.is_loading:
+                # Same rule the other way round: a load already under way
+                # (startup, engine switch) would freeze this capture.
+                print("Model still loading; press again once it is ready")
+                self._sound_manager.play_error()
+                return
+            if self._transcriber.was_unloaded_when_idle:
                 print("Model unloaded; recording now, reloading on release")
             else:
-                print("Model not ready yet")
+                # Never loaded, or failed to: retry the load now. No capture is
+                # running, so the GIL pause harms nothing - and without this
+                # every later press answered "not ready" until a restart.
+                print("Model not ready; retrying the load")
                 self._sound_manager.play_error()
+                self._tray_app.set_state(AppState.LOADING)
+                self._transcriber.load_model_async()
                 return
 
         if self._processing:
@@ -286,11 +309,12 @@ class FlototextApp:
             self._sound_manager.play_error()
             return
 
-        # The idle watchdog may have released the model while we were away; the
-        # reload was kicked off on key press, this waits for it to finish.
+        # The idle watchdog may have released the model while we were away;
+        # reload it now that the capture is over, and wait for it.
         if not self._transcriber.is_ready:
             self._tray_app.set_state(AppState.LOADING)
             if not self._transcriber.ensure_loaded():
+                self._keep_failed_capture(audio_data, duration)
                 self._on_transcription_error(localization.get("errors.model_not_loaded"))
                 return
             self._tray_app.set_state(AppState.PROCESSING)
@@ -299,8 +323,10 @@ class FlototextApp:
         result = self._transcriber.transcribe(audio_data, config.audio.sample_rate)
 
         if not result.success:
+            self._keep_failed_capture(audio_data, duration)
             self._on_transcription_error(result.error or "Unknown error")
             return
+        self._failed_capture = None
 
         if not result.text.strip():
             print("Empty transcription")
@@ -311,17 +337,8 @@ class FlototextApp:
         text = self._text_corrector.correct(result.text.strip())
         word_count = len(text.split())
 
-        # Save to database
-        transcription = Transcription(
-            text=text,
-            language=result.language,
-            duration_seconds=duration,
-            created_at=datetime.now(),
-            word_count=word_count
-        )
-        self._database.save_transcription(transcription)
-
-        # Insert text at cursor position
+        # Insert text at cursor position - before anything else can fail: the
+        # dictation reaching the user matters more than its history entry.
         if self._text_inserter.insert_text(text):
             print(f"Transcribed and pasted: {text[:50]}...")
             self._tray_app.increment_transcription_count()
@@ -335,6 +352,45 @@ class FlototextApp:
             self._notification_manager.notify_clipboard_only(text)
 
         self._tray_app.set_state(AppState.IDLE)
+
+        # History last. The database lives in a Syncthing-shared folder, where
+        # a locked or damaged file is plausible; that must only cost history.
+        try:
+            self._database.save_transcription(Transcription(
+                text=text,
+                language=result.language,
+                duration_seconds=duration,
+                created_at=datetime.now(),
+                word_count=word_count
+            ))
+        except Exception as e:
+            print(f"Could not save transcription to history: {e}")
+
+    def _keep_failed_capture(self, audio_data, duration: float) -> None:
+        """Hold on to a capture that could not be transcribed, for a retry."""
+        self._failed_capture = (audio_data, duration)
+        self._notification_manager.notify_error(localization.get("notifications.retry_available"))
+
+    def _on_retry_last(self) -> None:
+        """Transcribe again the last capture that failed."""
+        capture = self._failed_capture
+        if capture is None:
+            return
+        if self._processing or self._audio_recorder.is_recording:
+            print("Busy; retry the last dictation once this one is done")
+            return
+
+        print("Retrying the last failed dictation")
+        self._processing = True
+        self._tray_app.set_state(AppState.PROCESSING)
+
+        def process():
+            try:
+                self._process_transcription(*capture)
+            finally:
+                self._processing = False
+
+        threading.Thread(target=process, daemon=True).start()
 
     def _on_toggle_sounds(self, enabled: bool) -> None:
         """Handle sound toggle.
@@ -405,6 +461,13 @@ class FlototextApp:
 
         if self._processing:
             print("Cannot switch ASR backend while a transcription is running")
+            return
+
+        if self._transcriber.is_loading:
+            # Two loads at once double the VRAM and race to install their
+            # engine; the menu could end up naming one and running another.
+            print("Cannot switch ASR backend while a model is loading")
+            self._tray_app.refresh_ui()
             return
 
         print(f"Switching ASR backend to: {backend}")
