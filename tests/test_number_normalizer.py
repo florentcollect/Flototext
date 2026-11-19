@@ -32,5 +32,27 @@ class NumberNormalizerTests(unittest.TestCase):
         self.assertEqual(normalize_french_numbers("vingt et un jours"), "21 jours")
 
 
+
+class OrdinaryWordsStayWordsTests(unittest.TestCase):
+    """Found by running the normaliser on everyday French (audit 2026-11-19)."""
+
+    def test_everyday_french_is_untouched(self):
+        for phrase in [
+            "Quoi de neuf ?",
+            "un vélo neuf.",
+            "Regarde ce mille-pattes.",
+            "un mille-pattes",
+            "Mille mercis",
+            "faire les cent pas",
+        ]:
+            with self.subTest(phrase=phrase):
+                self.assertEqual(normalize_french_numbers(phrase), phrase)
+
+    def test_compound_numbers_still_convert(self):
+        self.assertEqual(normalize_french_numbers("dix-neuf"), "19")
+        self.assertEqual(normalize_french_numbers("neuf cents euros"), "900 euros")
+        self.assertEqual(normalize_french_numbers("deux mille"), "2000")
+        self.assertEqual(normalize_french_numbers("trois cents pages"), "300 pages")
+
 if __name__ == "__main__":
     unittest.main()

@@ -94,6 +94,13 @@ class FrenchProseIsLeftAloneTests(unittest.TestCase):
         # Canary produit pour midjourney. Les deux doivent rester distincts.
         "on se retrouve a mi-journee pour dejeuner.",
         "une reunion a mi-journee, ca arrange tout le monde.",
+        # Le normaliseur de nombres passe aussi par correct() : ces mots sont
+        # du francais avant d'etre des nombres (audit du 2026-11-19).
+        "Quoi de neuf ?",
+        "un vélo neuf.",
+        "Regarde ce mille-pattes.",
+        "Mille mercis pour ton aide.",
+        "il fait les cent pas.",
     ]
 
     def test_project_dictionary_leaves_ordinary_french_untouched(self):

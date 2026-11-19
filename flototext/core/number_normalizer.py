@@ -64,7 +64,15 @@ def normalize_french_numbers(text: str) -> str:
 
     def replace_match(match: re.Match) -> str:
         phrase = match.group(0)
-        if _tokenize(phrase) in (["un"], ["une"]):
+        # A lone word that is also ordinary French stays a word: "un"/"une"
+        # (articles), "neuf" ("quoi de neuf", "un vélo neuf"), "mille" and
+        # "cent" ("mille mercis", "faire les cent pas"). Inside a compound
+        # number they still count: "dix-neuf", "deux mille", "neuf cents".
+        if _tokenize(phrase) in (["un"], ["une"], ["neuf"], ["mille"], ["cent"]):
+            return phrase
+        # Glued to a following word by a hyphen, it is part of a noun, not a
+        # number: "mille-pattes", "un mille-feuille", "cent-garde".
+        if re.match(r"-\w", text[match.end():match.end() + 2]):
             return phrase
 
         value = parse_french_number(phrase)
