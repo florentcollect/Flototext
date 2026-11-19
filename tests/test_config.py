@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 from flototext.config import Config
@@ -68,6 +69,43 @@ class SilenceThresholdSettingTests(unittest.TestCase):
                                          encoding="utf-8")
             cfg.load_settings()
             self.assertEqual(cfg.audio.silence_rms_threshold, Config().audio.silence_rms_threshold)
+
+
+class SettingsFileRobustnessTests(unittest.TestCase):
+    def test_wrong_type_does_not_crash_startup(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = Config(base_dir=Path(tmp))
+            cfg.ensure_directories()
+            cfg.settings_path.write_text(json.dumps({"model": {"idle_unload_seconds": "abc"}}),
+                                         encoding="utf-8")
+            with unittest.mock.patch("builtins.print"):
+                cfg.load_settings()  # must not raise
+
+    def test_save_leaves_no_temporary_file_and_a_complete_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = Config(base_dir=Path(tmp))
+            cfg.ensure_directories()
+            cfg.audio.input_device = "Shure MV7"
+            cfg.save_settings()
+            self.assertEqual(json.loads(cfg.settings_path.read_text(encoding="utf-8"))
+                             ["audio"]["input_device"], "Shure MV7")
+            self.assertEqual([p.name for p in cfg.settings_path.parent.iterdir()],
+                             ["settings.json"])
+
+    def test_interrupted_write_keeps_the_previous_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = Config(base_dir=Path(tmp))
+            cfg.ensure_directories()
+            cfg.audio.input_device = "Shure MV7"
+            cfg.save_settings()
+
+            def crash(*_a, **_k):
+                raise IOError("killed mid-write")
+
+            with unittest.mock.patch("flototext.config.json.dump", side_effect=crash),                     unittest.mock.patch("builtins.print"):
+                cfg.save_settings()
+            self.assertEqual(json.loads(cfg.settings_path.read_text(encoding="utf-8"))
+                             ["audio"]["input_device"], "Shure MV7")
 
 if __name__ == "__main__":
     unittest.main()

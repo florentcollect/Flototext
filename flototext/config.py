@@ -146,7 +146,9 @@ class Config:
                 self.model.vram_budget_gb = float(model["vram_budget_gb"])
             if "over_budget_idle_seconds" in model:
                 self.model.over_budget_idle_seconds = int(model["over_budget_idle_seconds"])
-        except (json.JSONDecodeError, IOError) as e:
+        except (json.JSONDecodeError, IOError, ValueError, TypeError, AttributeError) as e:
+            # A hand-edited value of the wrong type ("abc" for a number, a list
+            # for a section) must cost that setting, not the app's startup.
             print(f"Warning: Could not load settings: {e}")
 
     def save_settings(self) -> None:
@@ -171,8 +173,14 @@ class Config:
         }
         try:
             self.data_dir.mkdir(parents=True, exist_ok=True)
-            with open(self.settings_path, 'w', encoding='utf-8') as f:
+            # Write aside then swap: a process killed mid-write (Stop-Process
+            # -Force in start-flototext.bat) used to leave a truncated file,
+            # and every setting - the pinned microphone included - fell back
+            # to its default on the next start.
+            tmp_path = self.settings_path.with_suffix(".json.tmp")
+            with open(tmp_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2)
+            os.replace(tmp_path, self.settings_path)
         except IOError as e:
             print(f"Warning: Could not save settings: {e}")
 
