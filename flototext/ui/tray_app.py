@@ -86,6 +86,12 @@ class TrayApp:
         self._notifications_enabled = config.ui.show_notifications
         self._mute_enabled = config.ui.mute_during_recording
         self._transcription_count = 0
+        # Every pystray update goes through this lock. set_state() is called
+        # from the loader, the transcription worker and the hotkey worker; two
+        # of them racing into pystray's icon setter both released the same
+        # handle (OSError WinError 1402) and the traceback killed a dictation.
+        self._ui_lock = threading.RLock()
+        self._icon_images: dict = {}
 
         if not HAS_PYSTRAY:
             print("Warning: pystray not available, tray icon disabled")
@@ -298,8 +304,7 @@ class TrayApp:
                 self.on_change_language(language_code)
             self._update_menu()
             # Update tooltip
-            if self._icon:
-                self._icon.title = self._get_tooltip()
+            self._apply_to_icon(lambda icon: setattr(icon, "title", self._get_tooltip()))
 
     def _change_asr_backend(self, backend: str) -> None:
         """Change the active ASR backend (engine swap happens in main.py)."""
@@ -315,10 +320,30 @@ class TrayApp:
             self.on_quit()
         self.stop()
 
+    def _apply_to_icon(self, update: Callable) -> None:
+        """Run one pystray update under the UI lock, and never let it raise.
+
+        The icon is cosmetic: a failed redraw must not abort the transcription
+        or error path that asked for it.
+        """
+        with self._ui_lock:
+            icon = self._icon
+            if icon is None:
+                return
+            try:
+                update(icon)
+            except Exception as e:
+                print(f"Tray update failed: {e}")
+
     def _update_menu(self) -> None:
         """Update the tray icon menu."""
-        if self._icon:
-            self._icon.menu = self._create_menu()
+        self._apply_to_icon(lambda icon: setattr(icon, "menu", self._create_menu()))
+
+    def _state_image(self, state: AppState) -> Image.Image:
+        """Icon image for a state, drawn once and reused."""
+        if state not in self._icon_images:
+            self._icon_images[state] = self._create_icon_image(state)
+        return self._icon_images[state]
 
     def set_state(self, state: AppState) -> None:
         """Set the application state and update icon.
@@ -326,22 +351,37 @@ class TrayApp:
         Args:
             state: New application state.
         """
-        self._state = state
-        if self._icon:
-            self._icon.icon = self._create_icon_image(state)
-            self._icon.title = self._get_tooltip()
-            self._update_menu()
+        def update(icon):
+            self._state = state
+            icon.icon = self._state_image(state)
+            icon.title = self._get_tooltip()
+            icon.menu = self._create_menu()
+
+        with self._ui_lock:
+            self._state = state
+            self._apply_to_icon(update)
+
+    def notify(self, message: str, title: Optional[str] = None) -> None:
+        """Show a Windows notification balloon from the tray icon."""
+        def update(icon):
+            if getattr(icon, "HAS_NOTIFICATION", True):
+                icon.notify(message, title or config.ui.app_name)
+
+        self._apply_to_icon(update)
 
     def increment_transcription_count(self) -> None:
         """Increment the transcription counter."""
-        self._transcription_count += 1
+        with self._ui_lock:
+            self._transcription_count += 1
         self._update_menu()
 
     def refresh_ui(self) -> None:
         """Refresh the UI after language change."""
-        if self._icon:
-            self._icon.title = self._get_tooltip()
-            self._update_menu()
+        def update(icon):
+            icon.title = self._get_tooltip()
+            icon.menu = self._create_menu()
+
+        self._apply_to_icon(update)
 
     def start(self) -> None:
         """Start the tray application in a background thread."""
@@ -349,19 +389,25 @@ class TrayApp:
             return
 
         def run():
-            self._icon = pystray.Icon(
+            icon = pystray.Icon(
                 name=config.ui.app_name,
-                icon=self._create_icon_image(self._state),
+                icon=self._state_image(self._state),
                 title=self._get_tooltip(),
                 menu=self._create_menu()
             )
-            self._icon.run()
+            with self._ui_lock:
+                self._icon = icon
+            icon.run()
 
         thread = threading.Thread(target=run, daemon=False)
         thread.start()
 
     def stop(self) -> None:
         """Stop the tray application."""
-        if self._icon:
-            self._icon.stop()
-            self._icon = None
+        with self._ui_lock:
+            icon, self._icon = self._icon, None
+        if icon:
+            try:
+                icon.stop()
+            except Exception as e:
+                print(f"Tray stop failed: {e}")
