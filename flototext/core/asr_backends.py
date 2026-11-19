@@ -135,9 +135,12 @@ class CanaryOnnxBackend(BaseASRBackend):
     # failures, VRAM settling at 4.65 GB. Going lower risks failing at session
     # creation, when the encoder's initializers are copied to the device.
     #
-    # A BFC arena that reaches its cap does not fail: it reuses freed blocks.
-    # It only fails when a single instantaneous request exceeds the cap, which
-    # surfaces as the OOM path in Transcriber.transcribe().
+    # The cap alone is not enough: the arena keeps every block it ever carved,
+    # sized for each new input length, and never merges them back. With the
+    # weights holding 3.06 of the 4 GiB, the room left fills up after some
+    # thirty distinct lengths, and from then on every segment over ~15 s asks
+    # for 49-65 MB the arena cannot find: 20 refusals out of 149 back-to-back
+    # clips (2026-11-19). _install_arena_shrinkage() below is the fix.
     #
     # do_copy_in_default_stream already defaults to "1" and is left out on
     # purpose: setting it changes nothing.
@@ -150,6 +153,7 @@ class CanaryOnnxBackend(BaseASRBackend):
 
     def __init__(self) -> None:
         self._model = None
+        self._releasing_decoder = None
 
     def load(self) -> None:
         # Register torch's CUDA runtime DLLs so onnxruntime can build the CUDA
@@ -195,7 +199,53 @@ class CanaryOnnxBackend(BaseASRBackend):
                 model_name,
                 resampler_config=resampler_config,
             )
+        if providers:
+            self._install_arena_shrinkage()
         print(f"{self.name} model loaded successfully")
+
+    def _install_arena_shrinkage(self) -> None:
+        """Hand the GPU arena's free blocks back after each dictation.
+
+        ONNX Runtime can shrink an arena at the end of a run, freeing every
+        block not in use, when the run carries the
+        memory.enable_memory_arena_shrinkage option. onnx-asr calls run()
+        without options, so its sessions are wrapped:
+
+        - the encoder runs once per segment and shrinks every time;
+        - the decoder runs once per token, and shrinking on each step cost
+          +130 ms a dictation, so it shrinks once at the end of transcribe(),
+          by replaying the segment's first step.
+
+        Measured over 149 back-to-back clips (2026-11-19): 20 refusals -> 0,
+        VRAM between dictations 6.2 GB -> 4.16 GB (the level right after
+        loading), median latency +85 ms, WER unchanged. The cap stays as a
+        guard. Relies on onnx-asr internals (asr._encoder, asr._decoder,
+        decoder_mems): if they move, this is skipped and the arena grows as
+        before, with Transcriber's reload-and-retry as the net.
+        """
+        asr = getattr(self._model, "asr", None)
+        encoder = getattr(asr, "_encoder", None)
+        if encoder is None:
+            print("Arena shrinkage unavailable: onnx-asr has no asr._encoder")
+            return
+
+        run_options = _shrink_run_options()
+        asr._encoder = _ShrinkingSession(encoder, run_options)
+
+        # Parakeet has a joint decoder instead, with a small fixed footprint.
+        decoder = getattr(asr, "_decoder", None)
+        if decoder is not None and _ReleasingDecoder.FIRST_STEP_INPUT in {
+                i.name for i in decoder.get_inputs()}:
+            self._releasing_decoder = asr._decoder = _ReleasingDecoder(decoder, run_options)
+
+    def _release_working_memory(self) -> None:
+        if self._releasing_decoder is None:
+            return
+        try:
+            self._releasing_decoder.release()
+        except Exception as e:
+            # Housekeeping only: the text is already decoded.
+            print(f"Could not shrink the decoder arena: {e}")
 
     def _model_name(self) -> str:
         return config.model.canary_model_name
@@ -206,6 +256,12 @@ class CanaryOnnxBackend(BaseASRBackend):
         )
 
     def transcribe(self, audio, sample_rate, language_label, language_code):
+        try:
+            return self._transcribe_segments(audio, sample_rate, language_code)
+        finally:
+            self._release_working_memory()
+
+    def _transcribe_segments(self, audio, sample_rate, language_code):
         max_samples = int(self.MAX_SEGMENT_SECONDS * sample_rate)
 
         if len(audio) <= max_samples:
@@ -231,6 +287,63 @@ class CanaryOnnxBackend(BaseASRBackend):
     def cleanup(self) -> None:
         # onnxruntime sessions are released when the model is dereferenced.
         self._model = None
+        self._releasing_decoder = None
+
+
+_SHRINK_ARENA = "memory.enable_memory_arena_shrinkage"
+
+
+def _shrink_run_options():
+    import onnxruntime as ort
+
+    run_options = ort.RunOptions()
+    run_options.add_run_config_entry(_SHRINK_ARENA, "gpu:0")
+    return run_options
+
+
+class _ShrinkingSession:
+    """An InferenceSession whose every run shrinks the GPU arena afterwards."""
+
+    def __init__(self, session, run_options):
+        self._session = session
+        self._run_options = run_options
+
+    def run(self, output_names, input_feed, run_options=None):
+        return self._session.run(output_names, input_feed, self._run_options)
+
+    def __getattr__(self, name):
+        return getattr(self._session, name)
+
+
+class _ReleasingDecoder:
+    """Canary's decoder, able to shrink its arena once a dictation is done.
+
+    A shrink happens only at the end of a run, and the last step of the
+    decoding loop is not known in advance. So the first step of each segment,
+    the one with empty decoder_mems, is kept and replayed with the shrink
+    option by release(): one extra step instead of one shrink per token.
+    """
+
+    FIRST_STEP_INPUT = "decoder_mems"
+
+    def __init__(self, session, run_options):
+        self._session = session
+        self._run_options = run_options
+        self._first_step = None
+
+    def run(self, output_names, input_feed, run_options=None):
+        mems = input_feed.get(self.FIRST_STEP_INPUT)
+        if mems is not None and mems.shape[2] == 0:
+            self._first_step = (output_names, input_feed)
+        return self._session.run(output_names, input_feed, run_options)
+
+    def release(self) -> None:
+        step, self._first_step = self._first_step, None
+        if step is not None:
+            self._session.run(step[0], step[1], self._run_options)
+
+    def __getattr__(self, name):
+        return getattr(self._session, name)
 
 
 _UNK_RE = re.compile(r"\s*<unk>\s*")

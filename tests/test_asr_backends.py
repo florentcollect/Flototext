@@ -193,5 +193,110 @@ class CanaryLoadOptionsTests(unittest.TestCase):
         self.assertNotIn("providers", self._load(cuda=False))
 
 
+class FakeSession:
+    """An InferenceSession stand-in that records the run options it gets."""
+
+    def __init__(self, inputs=("audio_signal", "length")):
+        self.runs = []
+        self._inputs = [types.SimpleNamespace(name=n) for n in inputs]
+
+    def get_inputs(self):
+        return self._inputs
+
+    def run(self, output_names, input_feed, run_options=None):
+        self.runs.append((input_feed, run_options))
+        return ["out"]
+
+
+class FakeRunOptions:
+    def __init__(self):
+        self.entries = {}
+
+    def add_run_config_entry(self, key, value):
+        self.entries[key] = value
+
+
+def mems(steps):
+    return np.zeros((2, 1, steps, 4), dtype=np.float32)
+
+
+class ArenaShrinkageTests(unittest.TestCase):
+    """Guards the fix for the arena filling up: 20 refusals out of 149
+    back-to-back clips without it, none with it (2026-11-19)."""
+
+    def _install(self, asr):
+        backend = CanaryOnnxBackend()
+        backend._model = types.SimpleNamespace(asr=asr)
+        fake_ort = types.SimpleNamespace(RunOptions=FakeRunOptions)
+        with patch.dict("sys.modules", {"onnxruntime": fake_ort}), patch("builtins.print"):
+            backend._install_arena_shrinkage()
+        return backend
+
+    def test_every_encoder_run_asks_for_a_shrink(self):
+        encoder = FakeSession()
+        asr = types.SimpleNamespace(_encoder=encoder)
+        self._install(asr)
+
+        asr._encoder.run(["out"], {"audio_signal": 1})
+
+        options = encoder.runs[0][1]
+        self.assertEqual(options.entries, {"memory.enable_memory_arena_shrinkage": "gpu:0"})
+
+    def test_decoder_shrinks_once_after_the_dictation_not_every_token(self):
+        decoder = FakeSession(inputs=("input_ids", "decoder_mems"))
+        asr = types.SimpleNamespace(_encoder=FakeSession(), _decoder=decoder)
+        backend = self._install(asr)
+
+        first = {"input_ids": 1, "decoder_mems": mems(0)}
+        asr._decoder.run(["logits"], first)
+        asr._decoder.run(["logits"], {"input_ids": 2, "decoder_mems": mems(1)})
+        self.assertTrue(all(options is None for _, options in decoder.runs))
+
+        backend._release_working_memory()
+        replay, options = decoder.runs[-1]
+        self.assertIs(replay, first)
+        self.assertIn("memory.enable_memory_arena_shrinkage", options.entries)
+
+        backend._release_working_memory()  # nothing kept: no second replay
+        self.assertEqual(len(decoder.runs), 3)
+
+    def test_transcribe_releases_even_when_recognition_fails(self):
+        backend = CanaryOnnxBackend()
+        released = []
+        backend._releasing_decoder = types.SimpleNamespace(release=lambda: released.append(1))
+
+        class Broken:
+            def recognize(self, audio, sample_rate, language):
+                raise RuntimeError("BFCArena")
+
+        backend._model = Broken()
+        with self.assertRaises(RuntimeError):
+            backend.transcribe(np.zeros(16000, dtype=np.float32), 16000, "French", "fr")
+        self.assertEqual(released, [1])
+
+    def test_a_failed_release_does_not_cost_the_text(self):
+        backend = CanaryOnnxBackend()
+        backend._model = FakeCanaryModel()
+
+        def boom():
+            raise RuntimeError("cudaFree")
+
+        backend._releasing_decoder = types.SimpleNamespace(release=boom)
+        with patch("builtins.print"):
+            text, _ = backend.transcribe(np.zeros(16000, dtype=np.float32), 16000, "French", "fr")
+        self.assertEqual(text, "seg")
+
+    def test_parakeet_joint_decoder_is_left_alone(self):
+        joint = FakeSession(inputs=("encoder_outputs", "targets"))
+        asr = types.SimpleNamespace(_encoder=FakeSession(), _decoder_joint=joint)
+        backend = self._install(asr)
+        self.assertIsNone(backend._releasing_decoder)
+        self.assertIs(asr._decoder_joint, joint)
+
+    def test_unknown_model_layout_is_skipped_quietly(self):
+        backend = self._install(None)  # no asr attribute to wrap
+        self.assertIsNone(backend._releasing_decoder)
+
+
 if __name__ == "__main__":
     unittest.main()
