@@ -180,10 +180,11 @@ class TrayApp:
         return Menu(*items)
 
     def _create_asr_model_menu(self) -> Menu:
-        """Create the ASR backend selection submenu (radio: Qwen / Canary)."""
+        """Create the ASR backend selection submenu (radio: Qwen / Canary / Parakeet)."""
         backends = [
             ("qwen", localization.get("menu.asr_qwen")),
             ("canary", localization.get("menu.asr_canary")),
+            ("parakeet", localization.get("menu.asr_parakeet")),
         ]
         items = []
         for backend_id, name in backends:

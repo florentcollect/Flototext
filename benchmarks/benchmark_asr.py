@@ -12,6 +12,7 @@ the auto-converted parquet directly with `huggingface_hub.hf_hub_download`.
 Usage (inside the qwen-asr venv):
     python -m benchmarks.benchmark_asr
     python -m benchmarks.benchmark_asr --num-clips 50 --backends qwen canary
+    python -m benchmarks.benchmark_asr --num-clips 100 --backends parakeet canary
     python -m benchmarks.benchmark_asr --lang en   # uses fr_fr by default
 
 Outputs:
@@ -330,7 +331,7 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Benchmark Qwen vs Canary on FLEURS.")
     parser.add_argument("--num-clips", type=int, default=50)
     parser.add_argument("--backends", nargs="+", default=["qwen", "canary"],
-                        choices=["qwen", "canary"])
+                        choices=["qwen", "canary", "parakeet"])
     parser.add_argument("--lang", default="fr", choices=list(LANG_PRESETS.keys()))
     args = parser.parse_args(argv)
 

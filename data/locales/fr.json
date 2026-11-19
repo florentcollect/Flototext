@@ -14,6 +14,7 @@
     "asr_model": "Modèle ASR",
     "asr_qwen": "Qwen3-ASR",
     "asr_canary": "NVIDIA Canary",
+    "asr_parakeet": "NVIDIA Parakeet",
     "quit": "Quitter"
   },
   "states": {

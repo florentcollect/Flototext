@@ -29,9 +29,10 @@ class AudioConfig:
 @dataclass
 class ModelConfig:
     """ASR model configuration."""
-    backend: str = "qwen"  # Active ASR engine: "qwen" or "canary"
+    backend: str = "qwen"  # Active ASR engine: "qwen", "canary" or "parakeet"
     model_name: str = "Qwen/Qwen3-ASR-1.7B"  # Qwen backend model id
     canary_model_name: str = "nemo-canary-1b-v2"  # Canary backend (onnx-asr) model name
+    parakeet_model_name: str = "nemo-parakeet-tdt-0.6b-v3"  # Parakeet backend (onnx-asr)
     device: str = "cuda:0"
     dtype: str = "bfloat16"  # Optimal for RTX 4090
     max_new_tokens: int = 512

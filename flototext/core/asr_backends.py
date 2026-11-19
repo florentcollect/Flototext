@@ -177,38 +177,43 @@ class CanaryOnnxBackend(BaseASRBackend):
         # its input untouched when the rate already matches. Keep them on CPU.
         resampler_config = {"providers": ["CPUExecutionProvider"]}
 
-        print(f"Loading Canary ONNX model: {config.model.canary_model_name} "
+        model_name = self._model_name()
+        print(f"Loading {self.name} ONNX model: {model_name} "
               f"(providers={'CUDA (capped)' if providers else 'default'})")
         # Downloads the ONNX weights from Hugging Face on first run, then caches.
         if providers:
             self._model = onnx_asr.load_model(
-                config.model.canary_model_name,
+                model_name,
                 providers=providers,
                 resampler_config=resampler_config,
             )
         else:
             self._model = onnx_asr.load_model(
-                config.model.canary_model_name,
+                model_name,
                 resampler_config=resampler_config,
             )
-        print("Canary model loaded successfully")
+        print(f"{self.name} model loaded successfully")
+
+    def _model_name(self) -> str:
+        return config.model.canary_model_name
+
+    def _recognize(self, audio, sample_rate, language_code):
+        return self._model.recognize(
+            audio, sample_rate=sample_rate, language=language_code
+        )
 
     def transcribe(self, audio, sample_rate, language_label, language_code):
         max_samples = int(self.MAX_SEGMENT_SECONDS * sample_rate)
 
         if len(audio) <= max_samples:
-            text = self._model.recognize(
-                audio, sample_rate=sample_rate, language=language_code
-            )
+            text = self._recognize(audio, sample_rate, language_code)
             return (text or "").strip(), language_code
 
         # Long recording: split into fixed windows and stitch the transcripts.
         parts = []
         for start in range(0, len(audio), max_samples):
             chunk = audio[start:start + max_samples]
-            part = self._model.recognize(
-                chunk, sample_rate=sample_rate, language=language_code
-            )
+            part = self._recognize(chunk, sample_rate, language_code)
             if part:
                 parts.append(part.strip())
         return " ".join(parts).strip(), language_code
@@ -216,6 +221,23 @@ class CanaryOnnxBackend(BaseASRBackend):
     def cleanup(self) -> None:
         # onnxruntime sessions are released when the model is dereferenced.
         self._model = None
+
+
+class ParakeetOnnxBackend(CanaryOnnxBackend):
+    """NVIDIA Parakeet TDT 0.6B v3 backend via onnx-asr (ONNX Runtime).
+
+    Same loading path as Canary (CUDA pinned, arena capped, resampler on CPU):
+    only the model and the recognize() call differ. Parakeet v3 detects the
+    language on its own and takes no language argument.
+    """
+
+    name = "parakeet"
+
+    def _model_name(self) -> str:
+        return config.model.parakeet_model_name
+
+    def _recognize(self, audio, sample_rate, language_code):
+        return self._model.recognize(audio, sample_rate=sample_rate)
 
 
 _CUDA_DLLS_REGISTERED = False
@@ -252,6 +274,8 @@ def create_backend(name: str) -> BaseASRBackend:
     """Instantiate the backend matching ``name`` (defaults to Qwen)."""
     if name == "canary":
         return CanaryOnnxBackend()
+    if name == "parakeet":
+        return ParakeetOnnxBackend()
     if name != "qwen":
         print(f"Unknown ASR backend '{name}', falling back to Qwen")
     return QwenBackend()

@@ -9,6 +9,7 @@ from flototext.core.asr_backends import (
     BaseASRBackend,
     QwenBackend,
     CanaryOnnxBackend,
+    ParakeetOnnxBackend,
     create_backend,
 )
 
@@ -21,8 +22,11 @@ class FactoryTests(unittest.TestCase):
     def test_create_backend_canary(self):
         self.assertIsInstance(create_backend("canary"), CanaryOnnxBackend)
 
+    def test_create_backend_parakeet(self):
+        self.assertIsInstance(create_backend("parakeet"), ParakeetOnnxBackend)
+
     def test_backends_implement_interface(self):
-        for backend in (QwenBackend(), CanaryOnnxBackend()):
+        for backend in (QwenBackend(), CanaryOnnxBackend(), ParakeetOnnxBackend()):
             self.assertIsInstance(backend, BaseASRBackend)
             self.assertTrue(hasattr(backend, "load"))
             self.assertTrue(callable(backend.transcribe))
@@ -64,6 +68,50 @@ class CanaryChunkingTests(unittest.TestCase):
 
         self.assertEqual(len(backend._model.calls), 3)
         self.assertEqual(text, "seg seg seg")
+
+
+class FakeParakeetModel:
+    """Parakeet v3 detects the language itself: recognize() takes none."""
+
+    def __init__(self):
+        self.calls = []
+
+    def recognize(self, audio, sample_rate):
+        self.calls.append(len(audio))
+        return " seg "
+
+
+class ParakeetTests(unittest.TestCase):
+    def test_no_language_argument_and_chunking(self):
+        backend = ParakeetOnnxBackend()
+        backend._model = FakeParakeetModel()
+        audio = np.zeros(16000 * 50, dtype=np.float32)
+
+        text, code = backend.transcribe(audio, 16000, "French", "fr")
+
+        self.assertEqual(len(backend._model.calls), 3)
+        self.assertEqual(text, "seg seg seg")
+        self.assertEqual(code, "fr")
+
+    def test_loads_parakeet_model_with_same_memory_caps(self):
+        recorded = {}
+
+        def fake_load_model(name, **kwargs):
+            recorded["name"] = name
+            recorded.update(kwargs)
+            return FakeParakeetModel()
+
+        fake_ort = types.SimpleNamespace(
+            get_available_providers=lambda: ["CUDAExecutionProvider", "CPUExecutionProvider"])
+        with patch.dict("sys.modules", {
+            "onnx_asr": types.SimpleNamespace(load_model=fake_load_model),
+            "onnxruntime": fake_ort,
+        }), patch.object(asr_backends, "_ensure_cuda_dlls", lambda: None), patch("builtins.print"):
+            ParakeetOnnxBackend().load()
+
+        self.assertEqual(recorded["name"], "nemo-parakeet-tdt-0.6b-v3")
+        self.assertEqual(recorded["providers"][0][1], CanaryOnnxBackend.CUDA_PROVIDER_OPTIONS)
+        self.assertEqual(recorded["resampler_config"], {"providers": ["CPUExecutionProvider"]})
 
 
 class CanaryLoadOptionsTests(unittest.TestCase):

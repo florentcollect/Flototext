@@ -395,7 +395,7 @@ class FlototextApp:
         """Handle ASR backend change: persist the choice and reload the engine.
 
         Args:
-            backend: New backend id ("qwen" or "canary").
+            backend: New backend id ("qwen", "canary" or "parakeet").
         """
         if backend == config.model.backend:
             return
